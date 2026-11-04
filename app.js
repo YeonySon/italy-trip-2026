@@ -117,9 +117,9 @@
       if (!res.ok) return fetchSameOrigin();
       var etag = res.headers.get('ETag');
       return res.json().then(function (j) { return { plan: JSON.parse(b64decode(j.content)), sha: j.sha, etag: etag }; });
-    }).then(function (r) { if (r) applyRemote(r); })
-      .catch(function () { /* 오프라인이면 갖고 있는 일정을 그대로 쓴다 */ })
-      .then(function () { fetching = false; });
+    }).then(function (r) { return r ? applyRemote(r) : false; })
+      .catch(function () { return null; /* 오프라인이면 갖고 있는 일정을 그대로 쓴다 */ })
+      .then(function (changed) { fetching = false; return changed; });
   }
   // API 호출 한도에 걸렸을 때는 같은 사이트의 plan.json으로 대신 확인한다.
   function fetchSameOrigin() {
@@ -128,19 +128,29 @@
     }).catch(function () { return null; });
   }
   function applyRemote(r) {
-    if (!valid(r.plan)) return;
+    if (!valid(r.plan)) return false;
     var hadBase = !!cache;
     if (r.sha) {
-      if (r.sha === remote.sha) { remote.etag = r.etag; writeCache(cache ? cache.data : r.plan); return; }
+      if (r.sha === remote.sha) { remote.etag = r.etag; writeCache(cache ? cache.data : r.plan); return false; }
       remote.sha = r.sha; remote.etag = r.etag;
     } else if (cache && (JSON.stringify(cache.data) === JSON.stringify(r.plan) ||
-        (r.plan.updatedAt || 0) < (cache.data.updatedAt || 0))) return; // 사이트 쪽 캐시가 더 오래된 내용이면 무시
+        (r.plan.updatedAt || 0) < (cache.data.updatedAt || 0))) return false; // 사이트 쪽 캐시가 더 오래된 내용이면 무시
     writeCache(r.plan);
-    if (dirty) { setSync('dirty'); return; }
+    if (dirty) { setSync('dirty'); return false; }
     var next = normalize(clone(r.plan));
     var changed = JSON.stringify(next) !== JSON.stringify(data);
     data = next;
     if (changed) { render(true); if (hadBase) toast('새 일정으로 업데이트했습니다'); }
+    return changed;
+  }
+  function checkLatest() {
+    if (fetching) return;
+    toast('최신 일정을 확인하는 중…');
+    remote.etag = null;
+    fetchRemote().then(function (changed) {
+      if (changed === null) toast('인터넷 연결을 확인하세요');
+      else if (!changed) { toast('이미 최신 일정입니다'); render(true); }
+    });
   }
 
   function publish() {
@@ -230,7 +240,7 @@
   (function initDay() {
     var t = todayStr();
     var i = data.days.findIndex(function (d) { return d.date === t; });
-    ui.day = i >= 0 ? i : (prefs.day >= 0 && prefs.day < data.days.length ? prefs.day : 0);
+    ui.day = i >= 0 ? i : (prefs.day >= -1 && prefs.day < data.days.length ? prefs.day : 0);
   })();
   var pending = [];
   function runPending() { var p = pending; pending = []; p.forEach(function (f) { f(); }); }
@@ -288,6 +298,10 @@
     down: '<path d="M12 5v13.5M6.5 13l5.5 5.5 5.5-5.5"/>',
     route: '<circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H15a3 3 0 000-6H9a3 3 0 010-6h6.8"/>',
     star: '<path d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
+    list: '<path d="M8 6.5h12M8 12h12M8 17.5h12"/><circle cx="4.5" cy="6.5" r=".6"/><circle cx="4.5" cy="12" r=".6"/><circle cx="4.5" cy="17.5" r=".6"/>',
+    clock: '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.5V12l3 2"/>',
+    refresh: '<path d="M19.5 12a7.5 7.5 0 11-2.2-5.3"/><path d="M19.5 4.5v4h-4"/>',
     grip: '<circle cx="9" cy="6.5" r="1.1"/><circle cx="15" cy="6.5" r="1.1"/><circle cx="9" cy="12" r="1.1"/><circle cx="15" cy="12" r="1.1"/><circle cx="9" cy="17.5" r="1.1"/><circle cx="15" cy="17.5" r="1.1"/>'
   };
   function icon(name, size) {
@@ -323,21 +337,46 @@
       var again = document.querySelector('[data-list="' + key + '"] > [data-idx="' + to + '"] .drag-h');
       if (again) again.focus();
     });
+    /* 끄는 동안 DOM 순서는 그대로 두고 transform만 바꾼다(부드럽고 포인터 캡처도 유지된다).
+       끄는 항목은 손가락을 그대로 따라가고, 다른 항목은 비켜 준다. 자리 바꿈 기준은 끄는 항목의 가장자리가
+       옆 항목 안으로 min(옆 항목 높이의 절반, 40px)만큼 들어갔을 때라서, 항목이 높아도 조금만 끌면 바뀐다. */
     btn.addEventListener('pointerdown', function (e) {
       if (e.button) return;
       var item = btn.closest('[data-idx]'), list = item.parentNode;
       e.preventDefault(); e.stopPropagation();
-      // 끄는 동안 항목을 DOM에서 옮기면 포인터 캡처가 풀리므로, 움직임은 window에서 받는다.
-      var pid = e.pointerId, from = +item.dataset.idx, lastY = e.clientY, raf = 0;
+      try { btn.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      var items = Array.prototype.filter.call(list.children, function (c) { return c.hasAttribute('data-idx'); });
+      var from = items.indexOf(item), target = from;
+      var sy0 = window.scrollY;
+      var rects = items.map(function (el) { var r = el.getBoundingClientRect(); return { top: r.top + sy0, bottom: r.bottom + sy0, h: r.height }; });
+      var A = rects[from];
+      var gap = from < rects.length - 1 ? rects[from + 1].top - A.bottom : (from > 0 ? A.top - rects[from - 1].bottom : 0);
+      gap = Math.max(0, gap);
+      var pid = e.pointerId, startY = e.clientY + sy0, lastY = e.clientY, raf = 0, done = false;
+      var buzz = function (ms) { if (navigator.vibrate) try { navigator.vibrate(ms); } catch (err) { /* ignore */ } };
+      list.classList.add('drag-list');
       item.classList.add('drag-on');
       document.body.classList.add('dragging');
-      if (navigator.vibrate) try { navigator.vibrate(10); } catch (err) { /* ignore */ }
-      var sibs = function () { return Array.prototype.filter.call(list.children, function (c) { return c !== item && c.hasAttribute('data-idx'); }); };
-      var place = function (y) {
-        var s = sibs(), before = null;
-        for (var i = 0; i < s.length; i++) { var r = s[i].getBoundingClientRect(); if (y < r.top + r.height / 2) { before = s[i]; break; } }
-        if (before) { if (item.nextElementSibling !== before) list.insertBefore(item, before); }
-        else if (s.length) { var last = s[s.length - 1]; if (last.nextElementSibling !== item) list.insertBefore(item, last.nextSibling); }
+      items.forEach(function (el) { el.style.willChange = 'transform'; if (el !== item) el.style.transition = 'transform .2s cubic-bezier(.2,.8,.2,1)'; });
+      item.style.transition = 'box-shadow .15s';
+      buzz(10);
+      var layout = function () {
+        var dy = lastY + window.scrollY - startY;
+        var top = A.top + dy, bottom = A.bottom + dy, t = from, j, r;
+        for (j = from + 1; j < rects.length; j++) { r = rects[j]; if (bottom > r.top + Math.min(r.h / 2, 40)) t = j; else break; }
+        if (t === from) for (j = from - 1; j >= 0; j--) { r = rects[j]; if (top < r.bottom - Math.min(r.h / 2, 40)) t = j; else break; }
+        item.style.transform = 'translate3d(0,' + dy + 'px,0) scale(1.02)';
+        if (t !== target) {
+          target = t;
+          buzz(5);
+          items.forEach(function (el, k) {
+            if (k === from) return;
+            var shift = 0;
+            if (target > from && k > from && k <= target) shift = -(A.h + gap);
+            else if (target < from && k < from && k >= target) shift = A.h + gap;
+            el.style.transform = shift ? 'translate3d(0,' + shift + 'px,0)' : '';
+          });
+        }
       };
       var tick = function () {
         // 헤더 바로 아래나 하단 탭 바로 위 약 50px 안에 손가락이 있을 때만 천천히 스크롤한다.
@@ -346,22 +385,32 @@
         var bottom = window.innerHeight - (tabbar ? tabbar.offsetHeight : 60) - 50, dy = 0;
         if (lastY < top) dy = -Math.min(10, Math.ceil((top - lastY) / 5));
         else if (lastY > bottom) dy = Math.min(10, Math.ceil((lastY - bottom) / 5));
-        if (dy) { window.scrollBy(0, dy); place(lastY); }
+        if (dy) { window.scrollBy(0, dy); layout(); }
         raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
-      var move = function (ev) { if (ev.pointerId !== pid) return; ev.preventDefault(); lastY = ev.clientY; place(lastY); };
+      var move = function (ev) { if (ev.pointerId !== pid) return; ev.preventDefault(); lastY = ev.clientY; layout(); };
       var end = function (ev) {
-        if (ev.pointerId !== pid) return;
+        if (ev.pointerId !== pid || done) return;
+        done = true;
         cancelAnimationFrame(raf);
         window.removeEventListener('pointermove', move);
         window.removeEventListener('pointerup', end);
         window.removeEventListener('pointercancel', end);
-        item.classList.remove('drag-on');
-        document.body.classList.remove('dragging');
+        if (ev.type === 'pointercancel') target = from;
+        // 놓은 자리로 부드럽게 내려앉힌 뒤 데이터 순서를 바꾼다.
+        var fin = target === from ? 0 : target > from ? rects[target].bottom - A.bottom : rects[target].top - A.top;
+        item.style.transition = 'transform .16s cubic-bezier(.2,.8,.2,1), box-shadow .16s';
+        item.style.transform = 'translate3d(0,' + fin + 'px,0)';
         justDragged = Date.now();
-        var to = Array.prototype.filter.call(list.children, function (c) { return c.hasAttribute('data-idx'); }).indexOf(item);
-        if (to !== from && to >= 0) onMove(from, to);
+        setTimeout(function () {
+          items.forEach(function (el) { el.style.transform = ''; el.style.transition = ''; el.style.willChange = ''; });
+          item.classList.remove('drag-on');
+          list.classList.remove('drag-list');
+          document.body.classList.remove('dragging');
+          justDragged = Date.now();
+          if (target !== from) onMove(+items[from].dataset.idx, +items[target].dataset.idx);
+        }, 170);
       };
       window.addEventListener('pointermove', move, { passive: false });
       window.addEventListener('pointerup', end);
@@ -567,6 +616,8 @@
   function dateStrip() {
     var t = todayStr();
     return h('div', { class: 'datestrip', role: 'tablist', 'aria-label': '날짜' },
+      h('button', { class: 'dchip all' + (ui.day === -1 ? ' on' : ''), role: 'tab', 'aria-selected': String(ui.day === -1), 'aria-label': '전체 일정 보기', onclick: function () { selectDay(-1); } },
+        h('span', { class: 'dw' }, '전체'), h('span', { class: 'dn' }, icon('list', 20)), h('span', { class: 'dc' })),
       data.days.map(function (d, i) {
         var dt = pd(d.date);
         return h('button', {
@@ -580,7 +631,7 @@
   }
   function selectDay(i) {
     if (!data.days.length) return;
-    ui.day = Math.max(0, Math.min(data.days.length - 1, i));
+    ui.day = Math.max(-1, Math.min(data.days.length - 1, i));
     prefs.day = ui.day; savePrefs();
     render();
     window.scrollTo(0, 0);
@@ -599,18 +650,35 @@
       return [h('div', { class: 'empty' }, '날짜가 없습니다.'), h('button', { class: 'add-btn solid', onclick: addDay }, icon('plus', 18), '날짜 추가')];
     }
     if (ui.day >= data.days.length) ui.day = data.days.length - 1;
-    var d = data.days[ui.day], di = ui.day;
-    var first = data.days[0].date, last = data.days[data.days.length - 1].date;
-    var isToday = d.date === todayStr();
-    var nowIdx = -1;
-    if (isToday) {
-      var n = new Date(), cur = n.getHours() * 60 + n.getMinutes();
-      d.items.forEach(function (it, i) { var m = /^(\d{1,2}):(\d{2})$/.exec(it.time.trim()); if (m && (+m[1]) * 60 + (+m[2]) <= cur) nowIdx = i; });
-    }
     var out = [];
-    out.push(h('div', { class: 'trip-line' },
-      h('span', null, fmtDot(first) + ' – ' + fmtShort(last).split(' ')[0] + ' · ' + data.days.length + '일'),
-      h('span', { class: 'dday' }, ddayText())));
+    var hint = installHint();
+    if (hint) out.push(hint);
+    out.push(tripLine());
+    if (ui.day === -1) return out.concat(viewAllDays());
+    var d = data.days[ui.day], di = ui.day;
+    var isToday = d.date === todayStr();
+    var nowIdx = -1, nextIdx = -1, cur = 0;
+    if (isToday) {
+      var n = new Date();
+      cur = n.getHours() * 60 + n.getMinutes();
+      d.items.forEach(function (it, i) {
+        var m = timeMin(it.time);
+        if (m == null) return;
+        if (m <= cur) nowIdx = i;
+        else if (nextIdx < 0) nextIdx = i;
+      });
+    }
+    if (nextIdx >= 0 && !ui.edit) {
+      var nx = d.items[nextIdx], mins = timeMin(nx.time) - cur;
+      out.push(h('button', { class: 'next-card', 'data-city': d.city, onclick: function () {
+        var el = document.querySelector('.tl-item[data-idx="' + nextIdx + '"]');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } },
+        h('span', { class: 'nc-ic' }, icon('clock', 18)),
+        h('span', { class: 'nc-t' }, h('b', null, '다음 일정 · ' + nx.time + ' (' + (mins >= 60 ? Math.floor(mins / 60) + '시간 ' : '') + (mins % 60) + '분 후)'),
+          h('small', null, plain(nx.text).slice(0, 60))),
+        icon('chevR', 16)));
+    }
     out.push(h('section', { class: 'day-head' + (ui.edit ? ' editable' : ''), 'data-city': d.city, onclick: ui.edit ? function () { editDay(di); } : null },
       h('div', { class: 'dh-top' }, h('span', { class: 'city-pill' }, d.label || cityName(d.city)), h('span', null, fmtLong(d.date))),
       h('h2', { class: 'dh-title' }, d.title || '제목 없음'),
@@ -643,8 +711,45 @@
         h('span', { class: 'lbl' }, icon('chevL', 14), prev ? fmtShort(prev.date) : ''), h('span', { class: 't' }, prev ? prev.title : '')),
       h('button', { class: 'next', disabled: !next, onclick: function () { selectDay(di + 1); } },
         h('span', { class: 'lbl' }, next ? fmtShort(next.date) : '', icon('chevR', 14)), h('span', { class: 't' }, next ? next.title : ''))));
-    out.push(h('p', { class: 'swipe-hint' }, '좌우로 밀어서 날짜를 넘길 수 있습니다'));
+    if (!prefs.swiped && window.matchMedia('(pointer: coarse)').matches) out.push(h('p', { class: 'swipe-hint' }, '좌우로 밀어서 날짜를 넘길 수 있습니다'));
     return out;
+  }
+  function tripLine() {
+    var first = data.days[0].date, last = data.days[data.days.length - 1].date;
+    return h('div', { class: 'trip-line' },
+      h('span', null, fmtDot(first) + ' – ' + fmtShort(last).split(' ')[0] + ' · ' + data.days.length + '일'),
+      h('span', { class: 'dday' }, ddayText()));
+  }
+  // 10일 전체를 한 화면에: 날짜, 도시, 제목, 그날 들르는 곳 이름
+  function viewAllDays() {
+    var t = todayStr();
+    return h('div', { class: 'alldays' }, data.days.map(function (d, i) {
+      var dt = pd(d.date), names = [];
+      d.items.forEach(function (it) {
+        var tpl = document.createElement('template');
+        tpl.innerHTML = sanitize(it.text);
+        Array.prototype.forEach.call(tpl.content.querySelectorAll('b,strong'), function (b) {
+          var s = b.textContent.trim();
+          if (s.length >= 2 && s.length <= 30 && !/[.!?]|니다|세요/.test(s) && names.indexOf(s) < 0) names.push(s);
+        });
+      });
+      return h('button', { class: 'ad-row' + (d.date === t ? ' today' : ''), 'data-city': d.city, onclick: function () { selectDay(i); } },
+        h('span', { class: 'ad-date' }, h('b', null, dt.getDate()), h('small', null, WD[dt.getDay()])),
+        h('span', { class: 'ad-main' },
+          h('span', { class: 'ad-top' }, h('span', { class: 'city-pill' }, d.label || cityName(d.city)), d.date === t ? h('span', { class: 'chip t-book' }, '오늘') : null),
+          h('span', { class: 'ad-title' }, d.title || '제목 없음'),
+          names.length ? h('span', { class: 'ad-sub' }, names.slice(0, 5).join(' · ')) : null),
+        h('span', { class: 'chev' }, icon('chevR', 18)));
+    }));
+  }
+  // 휴대폰 브라우저로 처음 열었을 때 한 번 보여 주는 설치 안내
+  function installHint() {
+    if (prefs.installHintOff || isStandalone() || !window.matchMedia('(pointer: coarse)').matches) return null;
+    return h('div', { class: 'install-hint' },
+      h('span', { class: 'row-ic' }, icon('phone', 18)),
+      h('span', { class: 'ih-t' }, h('b', null, '홈 화면에 추가해 앱처럼 쓰세요'), h('small', null, '인터넷이 없어도 열립니다')),
+      h('button', { class: 'btn small', onclick: installSheet }, '방법'),
+      h('button', { class: 'icon-btn', 'aria-label': '안내 닫기', onclick: function () { prefs.installHintOff = true; savePrefs(); render(true); } }, icon('x', 18)));
   }
   function attachSwipe(el) {
     var x0 = null, y0 = 0, t0 = 0;
@@ -661,7 +766,10 @@
       if (Date.now() - t0 > 700) return;
       if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) {
         var ni = ui.day + (dx < 0 ? 1 : -1);
-        if (ni >= 0 && ni < data.days.length) selectDay(ni);
+        if (ni >= -1 && ni < data.days.length) {
+          if (!prefs.swiped) { prefs.swiped = true; savePrefs(); }
+          selectDay(ni);
+        }
       }
     }, { passive: true });
   }
@@ -715,7 +823,36 @@
       return h('button', { class: ui.city === c ? 'on' : '', 'data-city': c, role: 'tab', 'aria-selected': String(ui.city === c), onclick: function () { ui.city = c; prefs.city = c; savePrefs(); render(); window.scrollTo(0, 0); } }, cityName(c));
     }));
   }
+  // 도시·분류와 상관없이 이름, 동네, 메뉴, 후기, 메모로 찾는다. 입력칸은 그대로 두고 결과만 다시 그린다.
   function viewPlaces() {
+    var box = h('div');
+    var inp = h('input', { type: 'search', class: 'search-in', placeholder: '가게·명소 이름, 동네, 메뉴로 찾기', 'aria-label': '장소 검색', enterkeyhint: 'search', autocomplete: 'off' });
+    inp.value = ui.q || '';
+    var clear = h('button', { class: 'search-x', 'aria-label': '검색어 지우기', onclick: function () { ui.q = ''; inp.value = ''; draw(); inp.focus(); } }, icon('x', 16));
+    function draw() {
+      clear.hidden = !ui.q;
+      box.replaceChildren ? box.replaceChildren() : (box.innerHTML = '');
+      append(box, ui.q && ui.q.trim() ? searchResults(ui.q.trim().toLowerCase()) : placesBody());
+    }
+    inp.addEventListener('input', function () { ui.q = inp.value; draw(); });
+    draw();
+    return [h('label', { class: 'search' }, icon('search', 18), inp, clear), box];
+  }
+  function searchResults(q) {
+    var hits = [];
+    Object.keys(data.places).forEach(function (c) {
+      CATS.forEach(function (k) {
+        data.places[c][k].forEach(function (p, i) {
+          var hay = [p.name, p.area, p.what, p.review, p.memo, p.when, p.book, plain(p.info)].join(' ').toLowerCase();
+          if (hay.indexOf(q) >= 0) hits.push([c, k, p, i]);
+        });
+      });
+    });
+    if (!hits.length) return h('div', { class: 'empty', style: 'margin-top:12px' }, '찾는 장소가 없습니다.');
+    return [h('p', { class: 'search-n' }, hits.length + '곳'),
+      h('div', { class: 'cards' }, hits.map(function (x) { return placeCard(x[0], x[1], x[2], x[3], true); }))];
+  }
+  function placesBody() {
     var c = ui.city, P = data.places[c];
     var out = [];
     out.push(h('div', { class: 'catbar', role: 'tablist', 'aria-label': '분류' }, CATS.map(function (k) {
@@ -740,11 +877,12 @@
     if (ui.edit) out.push(h('button', { class: 'add-btn solid', onclick: function () { editPlace(c, ui.cat, null); } }, icon('plus', 18), CAT_LABEL[ui.cat] + ' 추가'));
     return out;
   }
-  function placeCard(c, cat, p, i) {
+  function placeCard(c, cat, p, i, inSearch) {
     var isSight = cat === 'sight';
     var review = p.review ? h('div', { class: 'pl-review', onclick: function (e) { e.stopPropagation(); e.currentTarget.firstChild.classList.toggle('open'); } },
       h('div', { class: 'clamp' }, h('b', null, '후기 '), p.review)) : null;
-    return h('article', { class: 'card place' + (ui.edit ? ' editable' : ''), 'data-city': c, 'data-idx': i, onclick: ui.edit ? tapGuard(function () { editPlace(c, cat, i); }) : null },
+    return h('article', { class: 'card place' + (ui.edit ? ' editable' : ''), 'data-city': c, 'data-idx': inSearch ? null : i, onclick: ui.edit ? tapGuard(function () { editPlace(c, cat, i); }) : null },
+      inSearch ? h('div', { class: 'pl-where' }, cityName(c) + ' · ' + CAT_LABEL[cat]) : null,
       h('div', { class: 'pl-top' }, h('h3', null, p.name), p.when ? h('span', { class: 'when' }, p.when) : null),
       !isSight && p.area ? h('div', { class: 'pl-area' }, icon('pin', 14), p.area) : null,
       !isSight && p.rating ? h('div', { class: 'pl-rate' }, h('span', { class: 'star' }, '★ '), p.rating, p.reviews ? h('span', { class: 'muted' }, ' · 리뷰 ' + p.reviews) : null) : null,
@@ -759,7 +897,7 @@
       h('div', { class: 'pl-actions' },
         h('a', { class: 'pill-btn', href: mapUrl(p, c), target: '_blank', rel: 'noopener', onclick: stop }, icon('map', 17), '지도'),
         h('a', { class: 'pill-btn', href: blogUrl(p, c), target: '_blank', rel: 'noopener', onclick: stop }, icon('blog', 17), '블로그 후기')),
-      ui.edit ? dragHandle(p.name, function (from, to) { moveInArray(data.places[c][cat], from, to); save(); render(true); }) : null);
+      ui.edit && !inSearch ? dragHandle(p.name, function (from, to) { moveInArray(data.places[c][cat], from, to); save(); render(true); }) : null);
   }
 
   /* ---------------- info ---------------- */
@@ -801,6 +939,10 @@
         }))),
       h('button', { class: 'row', onclick: installSheet }, h('span', { class: 'row-ic' }, icon('phone', 19)),
         h('span', { class: 'row-t' }, h('b', null, isStandalone() ? '앱으로 실행 중' : '홈 화면에 설치'), h('small', null, isStandalone() ? '인터넷 없이도 열립니다' : '아이폰·안드로이드에서 앱처럼 쓰기')), h('span', { class: 'chev' }, icon('chevR', 18))),
+      h('button', { class: 'row', onclick: checkLatest }, h('span', { class: 'row-ic' }, icon('refresh', 19)),
+        h('span', { class: 'row-t' }, h('b', null, '최신 일정 확인'),
+          h('small', null, remote.checked ? '마지막 확인 ' + new Date(remote.checked).toTimeString().slice(0, 5) : '앱을 열 때 자동으로 확인합니다')),
+        h('span', { class: 'chev' }, icon('chevR', 18))),
       h('button', { class: 'row', onclick: tokenSheet }, h('span', { class: 'row-ic' }, icon('pencil', 19)),
         h('span', { class: 'row-t' }, h('b', null, isEditor() ? '편집 권한 연결됨' : '편집 권한 연결'),
           h('small', null, isEditor() ? (editorName || '편집자') + ' · 이 기기에서 일정을 고칠 수 있습니다' : '저장소 주인과 초대받은 협업자만 필요합니다')),
