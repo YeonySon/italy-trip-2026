@@ -195,6 +195,77 @@
 
   var gm = function (q) { return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q); };
   var nv = function (q) { return 'https://search.naver.com/search.naver?ssc=tab.blog.all&query=' + encodeURIComponent(q); };
+  var IT_CITY = { roma: 'Roma', firenze: 'Firenze', pisa: 'Pisa', venezia: 'Venezia' };
+  // 사용자가 검색어를 따로 정하지 않았으면 이름과 도시로 만든다. 이름을 바꾸면 링크도 따라간다.
+  function mapUrl(p, c) { return gm(p.mapQ || (p.name + ' ' + (IT_CITY[c] || cityName(c)))); }
+  function blogUrl(p, c) { return nv(p.naverQ || (cityName(c) + ' ' + p.name)); }
+
+  /* 일정 항목에 나오는 가게·장소를 찾아 지도·블로그 링크를 붙인다.
+     1) 장소 탭에 있는 이름(괄호를 뺀 이름, '·'로 나눈 앞부분 포함)이 글에 들어 있으면 그 장소
+     2) 굵게 표시한 이름은 장소 탭에서 비슷한 이름을 찾고, 없으면 그 이름으로 바로 검색 */
+  function placeIndex() {
+    var list = [];
+    Object.keys(data.places).forEach(function (c) {
+      CATS.forEach(function (k) {
+        (data.places[c][k] || []).forEach(function (p) {
+          if (!p.name) return;
+          var keys = [p.name];
+          var base = p.name.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+          if (base && keys.indexOf(base) < 0) keys.push(base);
+          base.split('·').forEach(function (seg) { seg = seg.trim(); if (seg.length >= 3 && keys.indexOf(seg) < 0) keys.push(seg); });
+          list.push({ p: p, c: c, keys: keys.map(function (x) { return x.toLowerCase(); }).filter(function (x) { return x.length >= 2; }) });
+        });
+      });
+    });
+    return list;
+  }
+  function linksFor(it, day, idx) {
+    var text = plain(it.text).toLowerCase();
+    var dt = pd(day.date), md = (dt.getMonth() + 1) + '/' + dt.getDate();
+    var choose = function (es) {
+      return es.find(function (e) { return (e.p.when || '').indexOf(md) >= 0; }) ||
+        es.find(function (e) { return e.c === day.city; }) || es[0];
+    };
+    var byKey = {};
+    idx.forEach(function (e) { e.keys.forEach(function (k) { if (text.indexOf(k) >= 0) (byKey[k] = byKey[k] || []).push(e); }); });
+    var used = [], found = [];
+    Object.keys(byKey).sort(function (a, b) { return b.length - a.length; }).forEach(function (k) {
+      if (used.some(function (u) { return u.indexOf(k) >= 0; })) return;
+      var e = choose(byKey[k]);
+      if (found.some(function (f) { return f.p === e.p; })) return;
+      used.push(k);
+      found.push({ p: e.p, c: e.c, at: text.indexOf(k) });
+    });
+    var t = document.createElement('template');
+    t.innerHTML = sanitize(it.text);
+    Array.prototype.forEach.call(t.content.querySelectorAll('b,strong'), function (b) {
+      var name = b.textContent.trim(), low = name.toLowerCase();
+      if (name.length < 2 || name.length > 30 || /[.!?]|니다|세요/.test(name)) return;
+      if (used.some(function (u) { return u.indexOf(low) >= 0 || low.indexOf(u) >= 0; })) return;
+      var near = idx.filter(function (e) {
+        var n = e.p.name.toLowerCase();
+        return n.indexOf(low) === 0 || (low.length >= 4 && n.indexOf(low) >= 0);
+      });
+      used.push(low);
+      if (near.length) {
+        var e = choose(near);
+        if (!found.some(function (f) { return f.p === e.p; })) found.push({ p: e.p, c: e.c, at: text.indexOf(low) });
+      } else {
+        found.push({ p: { name: name }, c: day.city, at: text.indexOf(low) });
+      }
+    });
+    return found.sort(function (a, b) { return a.at - b.at; });
+  }
+  function placeLinks(it, day, idx) {
+    var found = linksFor(it, day, idx);
+    if (!found.length) return null;
+    return h('div', { class: 'plinks' }, found.map(function (f) {
+      return h('span', { class: 'plk' },
+        h('a', { href: mapUrl(f.p, f.c), target: '_blank', rel: 'noopener', onclick: stop, 'aria-label': f.p.name + ' 지도' }, icon('map', 14), f.p.name),
+        h('a', { class: 'plk-blog', href: blogUrl(f.p, f.c), target: '_blank', rel: 'noopener', onclick: stop, 'aria-label': f.p.name + ' 블로그 후기' }, icon('blog', 14), '후기'));
+    }));
+  }
+
   function tagChip(t) { var type = TAG_OK[t[0]] ? t[0] : 'info'; return h('span', { class: 'chip t-' + type }, t[1]); }
   function chipsOf(tags) { return tags && tags.length ? h('div', { class: 'chips' }, tags.map(tagChip)) : null; }
   function cityName(c) { return (data.cities[c] && data.cities[c].name) || c; }
@@ -325,11 +396,12 @@
       h('h2', { class: 'dh-title' }, d.title || '제목 없음'),
       editIc()));
     if (d.items.length) {
+      var pidx = placeIndex();
       out.push(h('ol', { class: 'tl', 'data-city': d.city }, d.items.map(function (it, ii) {
         return h('li', { class: 'tl-item' + (ii === nowIdx ? ' now' : '') + (ui.edit ? ' editable' : ''), onclick: ui.edit ? function () { editItem(di, ii); } : null },
           h('div', { class: 'tl-time' }, it.time),
           h('div', { class: 'tl-rail' }),
-          h('div', { class: 'tl-body' }, h('div', { class: 'tl-text', html: sanitize(it.text) }), chipsOf(it.tags)),
+          h('div', { class: 'tl-body' }, h('div', { class: 'tl-text', html: sanitize(it.text) }), chipsOf(it.tags), placeLinks(it, d, pidx)),
           editIc());
       })));
     } else if (!ui.edit) {
@@ -461,8 +533,8 @@
       review,
       p.memo ? h('div', { class: 'pl-memo' }, h('b', null, '내 메모 '), p.memo) : null,
       h('div', { class: 'pl-actions' },
-        h('a', { class: 'pill-btn', href: gm(p.mapQ || (p.name + ' ' + cityName(c))), target: '_blank', rel: 'noopener', onclick: stop }, icon('map', 17), '지도'),
-        h('a', { class: 'pill-btn', href: nv(p.naverQ || (cityName(c) + ' ' + p.name)), target: '_blank', rel: 'noopener', onclick: stop }, icon('blog', 17), '블로그 후기')),
+        h('a', { class: 'pill-btn', href: mapUrl(p, c), target: '_blank', rel: 'noopener', onclick: stop }, icon('map', 17), '지도'),
+        h('a', { class: 'pill-btn', href: blogUrl(p, c), target: '_blank', rel: 'noopener', onclick: stop }, icon('blog', 17), '블로그 후기')),
       editIc());
   }
 
@@ -699,7 +771,9 @@
       day: fSelect('날짜', data.days.map(function (d, i) { return [i, fmtShort(d.date) + ' · ' + (d.title || cityName(d.city))]; }), di)
     };
     var pos = ii;
-    var body = [f.time.el, f.text.el, f.tags.el, f.day.el];
+    var body = [f.time.el, f.text.el,
+      h('p', { class: 'field-hint' }, '장소 탭에 있는 가게는 이름만 적어도 지도·블로그 버튼이 붙습니다. 처음 보는 가게는 이름을 굵게(B) 하세요.'),
+      f.tags.el, f.day.el];
     if (!isNew) body.push(orderRow(
       function () { pos = move(day.items, pos, -1); save(); render(true); toast('위로 옮겼습니다'); },
       function () { pos = move(day.items, pos, 1); save(); render(true); toast('아래로 옮겼습니다'); }));
@@ -833,6 +907,7 @@
     var isNew = i == null;
     var list = data.places[c][cat];
     var p = isNew ? { id: uid('p'), name: '', area: '', when: '', rating: '', reviews: '', what: '', review: '', tags: [], memo: '', mapQ: '', naverQ: '', book: '', price: '', info: '' } : list[i];
+    var orig = { name: p.name, mapQ: (p.mapQ || '').trim(), naverQ: (p.naverQ || '').trim() };
     var f = {
       name: fText('이름', p.name, { ph: '예: Trattoria Mario' }),
       cat: fSelect('분류', CATS.map(function (k) { return [k, CAT_LABEL[k]]; }), cat),
@@ -866,6 +941,11 @@
         ['name', 'when', 'book', 'price', 'area', 'rating', 'reviews', 'what', 'review', 'memo', 'mapQ', 'naverQ'].forEach(function (k) { p[k] = f[k].get(); });
         p.info = f.info.get(); p.tags = f.tags.get();
         var nc = f.city.get(), ncat = f.cat.get();
+        // 이름이나 도시를 바꿨는데 검색어는 그대로면, 예전 가게를 가리키지 않도록 검색어를 비워 새 이름으로 찾게 한다.
+        if (!isNew && (p.name !== orig.name || nc !== c)) {
+          if (p.mapQ === orig.mapQ) p.mapQ = '';
+          if (p.naverQ === orig.naverQ) p.naverQ = '';
+        }
         var target = data.places[nc][ncat];
         var idx = list.indexOf(p);
         if (target !== list && idx >= 0) list.splice(idx, 1);
