@@ -1,6 +1,7 @@
-/* 이탈리아 여행 앱. 모든 데이터는 이 기기의 localStorage에 저장되고, 백업 파일로 옮깁니다. */
+/* 이탈리아 여행 앱. 일정은 GitHub 저장소의 plan.json을 모두가 함께 보고, 편집 권한이 있는 사람만 고친다. */
 (function () {
   'use strict';
+  var own = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
 
   var PREF_KEY = 'italy2026.prefs.v1';
   var DEFAULT = window.DEFAULT_DATA;
@@ -15,24 +16,64 @@
   var uid = function (p) { return (p || 'x') + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 6); };
 
   /* ---------------- storage ---------------- */
+  /* 일정 데이터 검사. 형식이 틀린 파일 하나로 앱이 멈추지 않도록, 들어오는 데이터는 종류와 길이를 모두 확인한다. */
+  var KEY_OK = /^[a-z]{1,20}$/;
+  var PLACE_FIELDS = ['area', 'when', 'rating', 'reviews', 'what', 'review', 'memo', 'mapQ', 'naverQ', 'book', 'price', 'info'];
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function isStr(v, max) { return typeof v === 'string' && v.length <= (max || 20000); }
+  function optStr(v, max) { return v == null || isStr(v, max); }
+  function isArr(v, max) { return Array.isArray(v) && v.length <= (max || 500); }
+  function validTags(t) { return t == null || (isArr(t, 30) && t.every(function (x) { return isArr(x, 2) && isStr(x[0], 20) && isStr(x[1], 200); })); }
   function valid(d) {
-    return d && typeof d === 'object' && Array.isArray(d.days) && Array.isArray(d.checklist) &&
-      d.places && typeof d.places === 'object' && Array.isArray(d.guides);
+    try {
+      if (!isObj(d) || !isArr(d.days, 120) || !isArr(d.checklist, 100) || !isObj(d.places) || !isArr(d.guides, 100)) return false;
+      if (d.trip != null && !(isObj(d.trip) && optStr(d.trip.title, 200) && optStr(d.trip.summary) && optStr(d.trip.assume))) return false;
+      if (d.cities != null && !(isObj(d.cities) && Object.keys(d.cities).every(function (k) { return isObj(d.cities[k]) && optStr(d.cities[k].name, 50); }))) return false;
+      if (d.route != null && !(isArr(d.route, 50) && d.route.every(function (r) { return isObj(r) && optStr(r.city, 20) && optStr(r.name, 100) && optStr(r.nights, 200) && optStr(r.leg, 200); }))) return false;
+      var days = d.days.every(function (x) {
+        return isObj(x) && isStr(x.date, 10) && /^\d{4}-\d{2}-\d{2}$/.test(x.date) && isStr(x.city, 20) && optStr(x.label, 50) && optStr(x.title, 300) &&
+          (x.items == null || (isArr(x.items, 200) && x.items.every(function (it) { return isObj(it) && optStr(it.time, 40) && optStr(it.text) && validTags(it.tags); }))) &&
+          (x.notes == null || (isArr(x.notes, 50) && x.notes.every(function (n) { return isObj(n) && optStr(n.kind, 10) && optStr(n.html); })));
+      });
+      var checks = d.checklist.every(function (g) {
+        return isObj(g) && optStr(g.title, 200) && (g.items == null || (isArr(g.items, 300) && g.items.every(function (it) {
+          return isObj(it) && optStr(it.label, 500) && optStr(it.meta) && (it.done == null || typeof it.done === 'boolean');
+        })));
+      });
+      var places = Object.keys(d.places).every(function (c) {
+        var p = d.places[c];
+        if (!isObj(p)) return false;
+        return CATS.every(function (k) {
+          return p[k] == null || (isArr(p[k], 500) && p[k].every(function (x) {
+            return isObj(x) && isStr(x.name, 200) && validTags(x.tags) && PLACE_FIELDS.every(function (f) { return optStr(x[f]); });
+          }));
+        }) && (p.notes == null || (isArr(p.notes, 50) && p.notes.every(function (n) { return isStr(n); })));
+      });
+      var guides = d.guides.every(function (g) { return isObj(g) && isStr(g.id, 60) && optStr(g.title, 200) && optStr(g.sub, 300) && optStr(g.icon, 30) && optStr(g.html, 300000); });
+      return days && checks && places && guides;
+    } catch (e) { return false; }
   }
   function normalize(d) {
-    d.trip = d.trip || clone(DEFAULT.trip);
-    d.cities = d.cities || clone(DEFAULT.cities);
+    d.trip = isObj(d.trip) ? d.trip : clone(DEFAULT.trip);
+    d.cities = isObj(d.cities) ? d.cities : clone(DEFAULT.cities);
     d.route = Array.isArray(d.route) ? d.route : [];
+    // 도시 키는 소문자 영어만 받는다(__proto__ 같은 특수 키로 객체가 오염되지 않게).
+    Object.keys(d.cities).forEach(function (k) { if (!KEY_OK.test(k)) delete d.cities[k]; });
+    Object.keys(d.places).forEach(function (k) { if (!KEY_OK.test(k)) delete d.places[k]; });
+    Object.keys(d.places).forEach(function (k) { if (!own(d.cities, k)) d.cities[k] = { name: k }; });
     Object.keys(d.cities).forEach(function (c) {
-      var p = d.places[c] = d.places[c] || {};
-      CATS.forEach(function (k) { p[k] = Array.isArray(p[k]) ? p[k] : []; });
+      var p = d.places[c] = own(d.places, c) && isObj(d.places[c]) ? d.places[c] : {};
+      CATS.forEach(function (k) {
+        p[k] = Array.isArray(p[k]) ? p[k] : [];
+        p[k].forEach(function (x) { x.id = x.id || uid('p'); x.tags = Array.isArray(x.tags) ? x.tags : []; });
+      });
       p.notes = Array.isArray(p.notes) ? p.notes : [];
     });
     d.days.forEach(function (day) {
-      day.id = day.id || uid('d'); day.items = day.items || []; day.notes = day.notes || [];
-      day.items.forEach(function (it) { it.id = it.id || uid('i'); it.tags = it.tags || []; });
+      day.id = day.id || uid('d'); day.items = Array.isArray(day.items) ? day.items : []; day.notes = Array.isArray(day.notes) ? day.notes : [];
+      day.items.forEach(function (it) { it.id = it.id || uid('i'); it.tags = Array.isArray(it.tags) ? it.tags : []; it.time = it.time || ''; it.text = it.text || ''; });
     });
-    d.checklist.forEach(function (g) { g.id = g.id || uid('g'); g.items = g.items || []; });
+    d.checklist.forEach(function (g) { g.id = g.id || uid('g'); g.items = Array.isArray(g.items) ? g.items : []; });
     return d;
   }
   /* ---------------- shared plan on GitHub ----------------
@@ -48,14 +89,22 @@
 
   var token = lsGet(K.token) || '';
   var editorName = lsGet(K.editor) || '';
-  function isEditor() { return !!token; }
+  // 다른 사이트 안에 몰래 넣어 띄운 경우(클릭재킹)에는 편집을 막는다.
+  var framed = true;
+  try { framed = window.top !== window.self; } catch (e) { framed = true; }
+  function isEditor() { return !!token && !framed; }
 
   var cache = readJSON(K.cache); // { data, sha, etag, at } — 마지막으로 받은 공유 일정
   if (cache && !valid(cache.data)) cache = null;
   var remote = { sha: cache ? cache.sha : null, etag: cache ? cache.etag : null, checked: 0 };
   var draft = isEditor() ? readJSON(K.draft) : null; // 편집자가 아직 올리지 못한 변경
   if (draft && !valid(draft.data)) draft = null;
-  var data = normalize(clone(draft ? draft.data : cache ? cache.data : DEFAULT));
+  var data;
+  try { data = normalize(clone(draft ? draft.data : cache ? cache.data : DEFAULT)); }
+  catch (e) { // 저장된 일정이 망가졌으면 버리고 기본 일정으로 연 뒤 GitHub에서 다시 받는다.
+    lsDel(K.cache); lsDel(K.draft); cache = null; draft = null; remote.sha = null; remote.etag = null;
+    data = normalize(clone(DEFAULT));
+  }
   var dirty = !!draft;
   var sync = { state: dirty ? 'dirty' : 'idle', at: 0, publishing: false, timer: null };
 
@@ -129,6 +178,8 @@
   }
   function applyRemote(r) {
     if (!valid(r.plan)) return false;
+    var next;
+    try { next = normalize(clone(r.plan)); } catch (e) { return false; } // 망가진 파일은 저장하지도 쓰지도 않는다
     var hadBase = !!cache;
     if (r.sha) {
       if (r.sha === remote.sha) { remote.etag = r.etag; writeCache(cache ? cache.data : r.plan); return false; }
@@ -137,10 +188,14 @@
         (r.plan.updatedAt || 0) < (cache.data.updatedAt || 0))) return false; // 사이트 쪽 캐시가 더 오래된 내용이면 무시
     writeCache(r.plan);
     if (dirty) { setSync('dirty'); return false; }
-    var next = normalize(clone(r.plan));
     var changed = JSON.stringify(next) !== JSON.stringify(data);
+    var prev = data;
     data = next;
-    if (changed) { render(true); if (hadBase) toast('새 일정으로 업데이트했습니다'); }
+    if (changed) {
+      try { render(true); }
+      catch (e) { data = prev; lsDel(K.cache); cache = null; remote.sha = null; remote.etag = null; render(true); return false; }
+      if (hadBase) toast('새 일정으로 업데이트했습니다');
+    }
     return changed;
   }
   function checkLatest() {
@@ -228,10 +283,10 @@
 
   /* ---------------- ui state ---------------- */
   var ui = {
-    tab: TITLES[prefs.tab] ? prefs.tab : 'plan',
+    tab: own(TITLES, prefs.tab) ? prefs.tab : 'plan',
     day: 0,
-    city: data.cities[prefs.city] ? prefs.city : 'roma',
-    cat: CAT_LABEL[prefs.cat] ? prefs.cat : 'sight',
+    city: own(data.cities, prefs.city) ? prefs.city : 'roma',
+    cat: own(CAT_LABEL, prefs.cat) ? prefs.cat : 'sight',
     onlyTodo: !!prefs.onlyTodo,
     edit: false,
     guide: null,
@@ -255,6 +310,7 @@
         if (k === 'class') el.className = v;
         else if (k === 'html') el.innerHTML = v;
         else if (k === 'text') el.textContent = v;
+        else if (k === 'style') el.style.cssText = v; // CSSOM이라 보안 정책(CSP)에 막히지 않는다
         else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
         else el.setAttribute(k, v === true ? '' : v);
       });
@@ -302,6 +358,12 @@
     list: '<path d="M8 6.5h12M8 12h12M8 17.5h12"/><circle cx="4.5" cy="6.5" r=".6"/><circle cx="4.5" cy="12" r=".6"/><circle cx="4.5" cy="17.5" r=".6"/>',
     clock: '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.5V12l3 2"/>',
     refresh: '<path d="M19.5 12a7.5 7.5 0 11-2.2-5.3"/><path d="M19.5 4.5v4h-4"/>',
+    bus: '<rect x="5" y="4" width="14" height="13" rx="3"/><path d="M5 11h14M8 20v-3M16 20v-3"/><circle cx="8.5" cy="14" r=".6"/><circle cx="15.5" cy="14" r=".6"/>',
+    boat: '<path d="M3.5 15.5l2 4h13l2-4z"/><path d="M12 4v11.5M12 5.5l6 7.5h-6"/>',
+    taxi: '<path d="M5 16.5v-4l2-5.5h10l2 5.5v4z"/><path d="M5 16.5v2M19 16.5v2M9.5 4h5"/><circle cx="8.3" cy="13.5" r=".6"/><circle cx="15.7" cy="13.5" r=".6"/>',
+    nav: '<path d="M12 2.8l9.2 9.2-9.2 9.2L2.8 12z"/><path d="M9.3 13.3v-2.6h5.2M12.8 8.5l1.9 2.2-1.9 2.2"/>',
+    call: '<path d="M5 4.5h3.2l1.5 4-2 1.3a10 10 0 005 5l1.3-2 4 1.5v3.2a1.6 1.6 0 01-1.7 1.6A15.7 15.7 0 013.4 6.2 1.6 1.6 0 015 4.5z"/>',
+    ext: '<path d="M14 4.5h5.5V10M19.5 4.5L11 13M17 14v4.5a1 1 0 01-1 1H5.5a1 1 0 01-1-1V8a1 1 0 011-1H10"/>',
     grip: '<circle cx="9" cy="6.5" r="1.1"/><circle cx="15" cy="6.5" r="1.1"/><circle cx="9" cy="12" r="1.1"/><circle cx="15" cy="12" r="1.1"/><circle cx="9" cy="17.5" r="1.1"/><circle cx="15" cy="17.5" r="1.1"/>'
   };
   function icon(name, size) {
@@ -311,7 +373,7 @@
     s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor');
     s.setAttribute('stroke-width', '1.9'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round');
     s.setAttribute('aria-hidden', 'true');
-    s.innerHTML = ICONS[name] || ICONS.info;
+    s.innerHTML = own(ICONS, name) ? ICONS[name] : ICONS.info;
     return s;
   }
   function editIc() { return ui.edit ? h('span', { class: 'edit-ic' }, icon('pencil', 15)) : null; }
@@ -334,7 +396,7 @@
       if (to < 0 || to >= count) return;
       var key = list.getAttribute('data-list');
       onMove(from, to);
-      var again = document.querySelector('[data-list="' + key + '"] > [data-idx="' + to + '"] .drag-h');
+      var again = document.querySelector('[data-list="' + CSS.escape(key) + '"] > [data-idx="' + to + '"] .drag-h');
       if (again) again.focus();
     });
     /* 끄는 동안 DOM 순서는 그대로 두고 transform만 바꾼다(부드럽고 포인터 캡처도 유지된다).
@@ -453,7 +515,17 @@
     var t = document.createElement('template');
     t.innerHTML = String(html == null ? '' : html);
     cleanNode(t.content);
-    return t.innerHTML.replace(/^(\s|<br>)+|(\s|<br>)+$/g, '');
+    return trimBr(t.innerHTML);
+  }
+  // 앞뒤 공백과 <br>을 지운다. 정규식 대신 반복문을 써서 아주 긴 공백에도 느려지지 않게 한다.
+  function trimBr(s) {
+    s = s.trim();
+    for (var again = true; again;) {
+      again = false;
+      if (s.slice(0, 4).toLowerCase() === '<br>') { s = s.slice(4).trim(); again = true; }
+      if (s.slice(-4).toLowerCase() === '<br>') { s = s.slice(0, -4).trim(); again = true; }
+    }
+    return s;
   }
   function plain(html) { var t = document.createElement('template'); t.innerHTML = String(html || ''); return t.content.textContent.trim(); }
 
@@ -463,6 +535,55 @@
   // 사용자가 검색어를 따로 정하지 않았으면 이름과 도시로 만든다. 이름을 바꾸면 링크도 따라간다.
   function mapUrl(p, c) { return gm(p.mapQ || (p.name + ' ' + (IT_CITY[c] || cityName(c)))); }
   function blogUrl(p, c) { return nv(p.naverQ || (cityName(c) + ' ' + p.name)); }
+  // 현재 위치에서 대중교통 경로. 휴대폰에서는 구글 지도 앱으로 열린다.
+  function dirUrl(p, c) {
+    return 'https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=' +
+      encodeURIComponent(p.mapQ || (p.name + ' ' + (IT_CITY[c] || cityName(c))));
+  }
+  function stripParen(s) { return String(s).replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim(); }
+
+  /* 교통·예약 바로가기. 일정 글에 기차, 공항철도, 메트로, 버스, 수상버스, 택시가 나오면 해당 링크를 붙인다.
+     앱이 설치되어 있으면 휴대폰이 앱으로 열어 줄 수도 있다. */
+  var TRANSIT = {
+    trenitalia: { label: 'Trenitalia', sub: '고속열차·지역열차 예매, 앱에 티켓 보관', url: 'https://www.trenitalia.com/en.html', icon: 'train' },
+    italo: { label: 'Italo', sub: '고속열차 예매 (로마·피렌체·베네치아)', url: 'https://www.italotreno.com/en', icon: 'train' },
+    trainline: { label: 'Trainline', sub: '두 회사 열차를 한 번에 비교', url: 'https://www.thetrainline.com/', icon: 'train' },
+    leonardo: { label: '레오나르도 익스프레스', sub: '로마 테르미니 ↔ 피우미치노 공항', url: 'https://www.trenitalia.com/en/services/leonardo-express.html', icon: 'train' },
+    atac: { label: '로마 ATAC', sub: '메트로·버스 요금, 카드 탭 결제', url: 'https://www.atac.roma.it/en/tickets-and-passes/tickets', icon: 'bus' },
+    at: { label: '토스카나 버스', sub: '피렌체 시내버스, 피사 LAM Rossa', url: 'https://www.at-bus.it/en/ticket', icon: 'bus' },
+    actv: { label: '베네치아 수상버스', sub: '바포레토 노선·시간표 (ACTV)', url: 'https://actv.avmspa.it/en', icon: 'boat' },
+    vunica: { label: 'Venezia Unica', sub: '바포레토 1·2·3일권 온라인 구매', url: 'https://www.veneziaunica.it/en', icon: 'boat' },
+    freenow: { label: 'FREENOW', sub: '택시 호출 앱 (로마·피렌체)', url: 'https://www.free-now.com/it/', icon: 'taxi' },
+    ittaxi: { label: 'itTaxi', sub: '택시 호출 앱', url: 'https://www.ittaxi.it/', icon: 'taxi' }
+  };
+  function transitFor(it, day) {
+    var t = plain(it.text).toLowerCase(), out = [];
+    var add = function (k) { if (out.indexOf(k) < 0) out.push(k); };
+    if (/레오나르도|leonardo/.test(t)) add('leonardo');
+    else if (/지역열차|regionale/.test(t)) add('trenitalia');
+    else if (/기차|열차|frecciarossa|italo/.test(t) || /(smn|테르미니|termini|s\. ?lucia|산타 루치아|중앙역|centrale)[^.]{0,25}행/.test(t)) { add('trenitalia'); add('italo'); }
+    if (/메트로|metro/.test(t) || (day.city === 'roma' && /버스/.test(t))) add('atac');
+    if (/lam rossa/.test(t) || ((day.city === 'firenze' || day.city === 'pisa') && /버스/.test(t))) add('at');
+    if (/바포레토|수상버스|vaporetto|\d+번 배/.test(t)) add('actv');
+    if (/택시|taxi/.test(t)) { add('freenow'); add('ittaxi'); }
+    return out;
+  }
+  function transitLinks(it, day) {
+    var keys = transitFor(it, day);
+    if (!keys.length) return null;
+    return h('div', { class: 'golinks' }, keys.map(function (k) {
+      var x = TRANSIT[k];
+      return h('a', { class: 'go', href: x.url, target: '_blank', rel: 'noopener', onclick: stop }, icon(x.icon, 15), x.label, icon('ext', 13));
+    }));
+  }
+  // 명소의 '예약' 글에 들어 있는 사이트 주소를 링크로 바꾼다 (예: ticketing.colosseo.it · 30일 전 오픈)
+  function bookingLink(text) {
+    var m = /((?:[a-z0-9-]+\.)+(?:it|com|va|org|net|eu))(\/[^\s·,()]*)?/i.exec(String(text || '').slice(0, 300));
+    if (!m) return text;
+    var host = m[1].toLowerCase();
+    var i = text.indexOf(m[0]);
+    return [text.slice(0, i), h('a', { href: 'https://' + host + (m[2] || ''), target: '_blank', rel: 'noopener', onclick: stop }, m[0]), text.slice(i + m[0].length)];
+  }
 
   /* 일정 항목에 나오는 가게·장소를 찾아 지도·블로그 링크를 붙인다.
      1) 장소 탭에 있는 이름(괄호를 뺀 이름, '·'로 나눈 앞부분 포함)이 글에 들어 있으면 그 장소
@@ -474,7 +595,7 @@
         (data.places[c][k] || []).forEach(function (p) {
           if (!p.name) return;
           var keys = [p.name];
-          var base = p.name.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+          var base = stripParen(p.name);
           if (base && keys.indexOf(base) < 0) keys.push(base);
           base.split('·').forEach(function (seg) { seg = seg.trim(); if (seg.length >= 3 && keys.indexOf(seg) < 0) keys.push(seg); });
           list.push({ p: p, c: c, keys: keys.map(function (x) { return x.toLowerCase(); }).filter(function (x) { return x.length >= 2; }) });
@@ -525,14 +646,15 @@
     if (!found.length) return null;
     return h('div', { class: 'plinks' }, found.map(function (f) {
       return h('span', { class: 'plk' },
-        h('a', { href: mapUrl(f.p, f.c), target: '_blank', rel: 'noopener', onclick: stop, 'aria-label': f.p.name + ' 지도' }, icon('map', 14), f.p.name.replace(/\s*\([^)]*\)\s*/g, ' ').trim() || f.p.name),
+        h('a', { href: mapUrl(f.p, f.c), target: '_blank', rel: 'noopener', onclick: stop, 'aria-label': f.p.name + ' 지도' }, icon('map', 14), stripParen(f.p.name) || f.p.name),
+        h('a', { class: 'plk-blog plk-ic', href: dirUrl(f.p, f.c), target: '_blank', rel: 'noopener', onclick: stop, 'aria-label': f.p.name + ' 대중교통 길찾기', title: '길찾기' }, icon('nav', 16)),
         h('a', { class: 'plk-blog', href: blogUrl(f.p, f.c), target: '_blank', rel: 'noopener', onclick: stop, 'aria-label': f.p.name + ' 블로그 후기' }, icon('blog', 14), '후기'));
     }));
   }
 
-  function tagChip(t) { var type = TAG_OK[t[0]] ? t[0] : 'info'; return h('span', { class: 'chip t-' + type }, t[1]); }
+  function tagChip(t) { var type = own(TAG_OK, t[0]) ? t[0] : 'info'; return h('span', { class: 'chip t-' + type }, t[1]); }
   function chipsOf(tags) { return tags && tags.length ? h('div', { class: 'chips' }, tags.map(tagChip)) : null; }
-  function cityName(c) { return (data.cities[c] && data.cities[c].name) || c; }
+  function cityName(c) { return (own(data.cities, c) && data.cities[c].name) || c; }
   function stop(e) { e.stopPropagation(); }
 
   /* ---------------- render root ---------------- */
@@ -689,7 +811,7 @@
         return h('li', { class: 'tl-item' + (ii === nowIdx ? ' now' : '') + (ui.edit ? ' editable' : ''), 'data-idx': ii, onclick: ui.edit ? tapGuard(function () { editItem(di, ii); }) : null },
           h('div', { class: 'tl-time' }, it.time),
           h('div', { class: 'tl-rail' }),
-          h('div', { class: 'tl-body' }, h('div', { class: 'tl-text', html: sanitize(it.text) }), chipsOf(it.tags), placeLinks(it, d, pidx)),
+          h('div', { class: 'tl-body' }, h('div', { class: 'tl-text', html: sanitize(it.text) }), chipsOf(it.tags), placeLinks(it, d, pidx), transitLinks(it, d)),
           ui.edit ? dragHandle(it.time + ' 일정', function (from, to) {
             moveInArray(d.items, from, to); save(); render(true);
             toast('순서를 바꿨습니다. 시간도 맞는지 확인하세요');
@@ -888,7 +1010,7 @@
       !isSight && p.rating ? h('div', { class: 'pl-rate' }, h('span', { class: 'star' }, '★ '), p.rating, p.reviews ? h('span', { class: 'muted' }, ' · 리뷰 ' + p.reviews) : null) : null,
       !isSight && p.what ? h('p', { class: 'pl-what' }, p.what) : null,
       isSight && (p.book || p.price) ? h('dl', { class: 'kv' },
-        p.book ? [h('dt', null, '예약'), h('dd', null, p.book)] : null,
+        p.book ? [h('dt', null, '예약'), h('dd', null, bookingLink(p.book))] : null,
         p.price ? [h('dt', null, '가격'), h('dd', null, p.price)] : null) : null,
       isSight && p.info ? h('div', { class: 'pl-info', html: sanitize(p.info) }) : null,
       chipsOf(p.tags),
@@ -896,7 +1018,8 @@
       p.memo ? h('div', { class: 'pl-memo' }, h('b', null, '내 메모 '), p.memo) : null,
       h('div', { class: 'pl-actions' },
         h('a', { class: 'pill-btn', href: mapUrl(p, c), target: '_blank', rel: 'noopener', onclick: stop }, icon('map', 17), '지도'),
-        h('a', { class: 'pill-btn', href: blogUrl(p, c), target: '_blank', rel: 'noopener', onclick: stop }, icon('blog', 17), '블로그 후기')),
+        h('a', { class: 'pill-btn', href: dirUrl(p, c), target: '_blank', rel: 'noopener', onclick: stop }, icon('nav', 17), '길찾기'),
+        h('a', { class: 'pill-btn', href: blogUrl(p, c), target: '_blank', rel: 'noopener', onclick: stop }, icon('blog', 17), '후기')),
       ui.edit && !inSearch ? dragHandle(p.name, function (from, to) { moveInArray(data.places[c][cat], from, to); save(); render(true); }) : null);
   }
 
@@ -929,6 +1052,29 @@
         h('span', { class: 'chev' }, icon('chevR', 18)));
     }), ui.edit ? h('button', { class: 'row', onclick: function () { editGuideMeta(null); } },
       h('span', { class: 'row-ic' }, icon('plus', 19)), h('span', { class: 'row-t' }, h('b', null, '안내 페이지 추가'))) : null));
+
+    out.push(h('div', { class: 'sec-title' }, h('h3', null, '교통·예약 바로가기')));
+    out.push(h('div', { class: 'rows' }, ['trenitalia', 'italo', 'trainline', 'leonardo', 'atac', 'at', 'actv', 'vunica', 'freenow', 'ittaxi'].map(function (k) {
+      var x = TRANSIT[k];
+      return h('a', { class: 'row', href: x.url, target: '_blank', rel: 'noopener' },
+        h('span', { class: 'row-ic' }, icon(x.icon, 19)),
+        h('span', { class: 'row-t' }, h('b', null, x.label), h('small', null, x.sub)),
+        h('span', { class: 'chev' }, icon('ext', 17)));
+    })));
+    out.push(h('p', { class: 'foot', style: 'margin-top:8px' }, '휴대폰에 그 회사 앱이 설치되어 있으면 앱으로 열릴 수 있습니다.'));
+
+    out.push(h('div', { class: 'sec-title' }, h('h3', null, '긴급 연락')));
+    out.push(h('div', { class: 'rows' }, [
+      ['112', '통합 긴급번호', '경찰·구급·소방 (이탈리아 전역)', 'tel:112'],
+      ['주이탈리아 대한민국 대사관', '+39-06-4204021', '평일 09:30–12:00, 14:00–16:30', 'tel:+39064204021'],
+      ['대사관 근무시간 외 긴급', '+39-335-185-0499', '사건·사고 긴급 상황', 'tel:+393351850499'],
+      ['영사콜센터', '+82-2-3210-0404', '24시간, 한국어', 'tel:+82232100404']
+    ].map(function (r) {
+      return h('a', { class: 'row', href: r[3] },
+        h('span', { class: 'row-ic danger-ic' }, icon('call', 19)),
+        h('span', { class: 'row-t' }, h('b', null, r[0] + (r[0] === '112' ? ' · ' + r[1] : '')), h('small', null, (r[0] === '112' ? '' : r[1] + ' · ') + r[2])),
+        h('span', { class: 'chev' }, icon('chevR', 18)));
+    })));
 
     out.push(h('div', { class: 'sec-title' }, h('h3', null, '앱 설정')));
     var theme = prefs.theme || 'auto';
@@ -978,6 +1124,7 @@
       title: '편집 권한 연결',
       body: [
         h('p', { class: 'sheet-msg' }, '저장소 주인이나 초대받은 협업자가 만든 GitHub 토큰을 붙여 넣으세요. 토큰은 이 기기 안에만 저장되고 GitHub 말고는 어디에도 보내지 않습니다.'),
+        h('div', { class: 'hint-box' }, h('b', null, '공개 주의. '), '고친 일정은 공개 저장소에 저장되어 주소를 아는 누구나 볼 수 있습니다. 예약번호, 여권번호, 연락처 같은 개인정보는 적지 마세요.'),
         field('GitHub 토큰', inp), err,
         h('div', { class: 'hint-box' }, h('b', null, '아이폰. '), 'Safari와 홈 화면 앱은 저장 공간이 따로라, 홈 화면 앱에서 고치려면 앱 안에서 한 번 더 연결하세요.')
       ],
@@ -1040,6 +1187,7 @@
     ed.addEventListener('input', function () { clearTimeout(tmr); tmr = setTimeout(commit, 500); });
     ed.addEventListener('blur', commit);
     ed.addEventListener('paste', pastePlain);
+    ed.addEventListener('drop', blockDrop);
     pending.push(function () { clearTimeout(tmr); commit(); });
     out.push(h('div', { class: 'guide-tools' },
       fmtBtn('굵게', 'bold'), linkBtn(), fmtBtn('서식 지우기', 'removeFormat'),
@@ -1118,6 +1266,8 @@
     });
     return { el: field(label, seg), get: function () { return cur; } };
   }
+  // 편집 칸에 끌어다 놓는 HTML은 받지 않는다(붙여넣기는 글자만 받는다).
+  function blockDrop(e) { e.preventDefault(); }
   function pastePlain(e) {
     var t = (e.clipboardData || window.clipboardData);
     if (!t) return;
@@ -1142,6 +1292,7 @@
   function fRich(label, html, ph) {
     var ed = h('div', { class: 'rich-ed', contenteditable: 'true', 'data-ph': ph || '', html: sanitize(html) });
     ed.addEventListener('paste', pastePlain);
+    ed.addEventListener('drop', blockDrop);
     var wrap = h('div', { class: 'rich-wrap' }, h('div', { class: 'rich-tb' }, fmtBtn('굵게', 'bold'), linkBtn(), fmtBtn('서식 지우기', 'removeFormat')), ed);
     return { el: field(label, wrap), get: function () { return sanitize(ed.innerHTML); } };
   }
@@ -1360,7 +1511,7 @@
       what: fText('메뉴·특징', p.what, { multiline: true, rows: 2 }),
       review: fText('후기 요약', p.review, { multiline: true }),
       tags: fTags('태그', p.tags),
-      memo: fText('내 메모', p.memo, { multiline: true, ph: '예약 번호, 주문할 메뉴 등' }),
+      memo: fText('메모 (모두에게 공개됨)', p.memo, { multiline: true, ph: '주문할 메뉴, 가는 법 등. 예약번호 같은 개인정보는 적지 마세요' }),
       mapQ: fText('지도 검색어', p.mapQ, { ph: '비우면 이름으로 검색' }),
       naverQ: fText('블로그 검색어', p.naverQ, { ph: '비우면 이름으로 검색' })
     };
@@ -1577,7 +1728,7 @@
     e.preventDefault();
     var k = href.slice(1);
     var map = { book: ['check'], now: ['check'], plan: ['plan'], move: ['info', 'move'], stay: ['info', 'stay'], care: ['info', 'care'], src: ['info', 'src'], roma: ['places', null, 'roma'], venezia: ['places', null, 'venezia'], firenze: ['places', null, 'firenze'] };
-    var m = map[k];
+    var m = own(map, k) ? map[k] : null;
     if (!m) return;
     ui.tab = m[0]; ui.guide = m[1] || null; if (m[2]) ui.city = m[2];
     render(); window.scrollTo(0, 0);
@@ -1585,7 +1736,12 @@
 
   /* ---------------- boot ---------------- */
   applyTheme();
-  render();
+  try { render(); }
+  catch (e) { // 저장된 일정 때문에 화면을 못 그리면 기본 일정으로 열고, 아래에서 최신 일정을 다시 받는다.
+    lsDel(K.cache); lsDel(K.draft); cache = null; remote.sha = null; remote.etag = null; dirty = false;
+    data = normalize(clone(DEFAULT)); ui.day = 0; ui.guide = null; ui.edit = false;
+    try { render(); } catch (e2) { app.textContent = '앱을 여는 중 문제가 생겼습니다. 새로고침해 주세요.'; }
+  }
   fetchRemote();
   if (dirty) setTimeout(publish, 1500);
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {

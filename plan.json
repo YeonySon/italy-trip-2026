@@ -133,8 +133,13 @@
     {
      "id": "ig",
      "time": "13:00",
-     "text": "성 베드로 대성당(무료, 겨울 07–19시, 보안 줄 30–40분). 쿠폴라(돔)는 현장 계단 €10, 엘리베이터 €15이고 엘리베이터를 타도 320계단을 더 오릅니다. 쿠폴라는 겨울에 17시에 닫으니 15시 전에 오르세요.",
-     "tags": []
+     "text": "성 베드로 대성당(무료, 겨울 07–19시, 보안 줄 30–40분). 쿠폴라(돔)는 선택입니다. 계단 €10, 엘리베이터 €15이고 엘리베이터를 타도 320계단을 더 오르며, 겨울에는 17시에 닫습니다. 시차가 남은 첫날이라 무리하지 마세요.",
+     "tags": [
+      [
+       "info",
+       "쿠폴라 선택"
+      ]
+     ]
     },
     {
      "id": "ih",
@@ -162,7 +167,7 @@
     {
      "id": "ik",
      "time": "22:00",
-     "text": "트레비 분수. 수조 앞 유료 구역은 최종 입장이 21:00이고 22시부터는 무료로 들어갈 수 있습니다.",
+     "text": "트레비 분수. 수조 앞 유료 구역은 최종 입장이 21:00이고 22시부터는 무료로 들어갈 수 있습니다. 피곤하면 12/30 스페인 계단에서 걸어서 8분 거리이니 그때 보세요.",
      "tags": []
     }
    ],
@@ -346,7 +351,7 @@
     {
      "id": "i17",
      "time": "09:00",
-     "text": "아침: <b>Pasticceria Nencioni</b>(구글 4.6) 또는 <b>Forno Ghibellina</b>(4.8).",
+     "text": "아침: 호텔 조식(피렌체 숙소는 조식 포함으로 예약하세요). 성탄 아침에 카페가 여는지는 확인되지 않았습니다. 연다면 <b>Pasticceria Nencioni</b>(4.6)나 <b>Forno Ghibellina</b>(4.8).",
      "tags": [
       [
        "tbd",
@@ -374,7 +379,7 @@
     {
      "id": "i1a",
      "time": "13:00",
-     "text": "성탄 점심 산 프레디아노의 <b>Trattoria I'Brindellone</b>(구글 4.7)에서 토스카나 가정식. 대안은 <b>Osteria dell'Enoteca</b>(4.7).",
+     "text": "성탄 점심. 이탈리아는 성탄 점심을 크게 먹습니다. 산 프레디아노의 <b>Trattoria I'Brindellone</b>(4.7)나 <b>Osteria dell'Enoteca</b>(4.7) 중 영업이 확인된 곳을 12월 초에 확정하세요.",
      "tags": [
       [
        "book",
@@ -389,23 +394,34 @@
     {
      "id": "i1b",
      "time": "15:45",
-     "text": "산 니콜로 쪽 계단으로 <b>미켈란젤로 광장</b>까지 오르막 20–30분. 16:45경 일몰을 보고, 바로 위 <b>산 미니아토 알 몬테 성당</b>(2025년 성탄절 15:30–18시)에 들릅니다.",
+     "text": "산 니콜로 쪽 계단으로 <b>미켈란젤로 광장</b>까지 오르막 20–30분. 16:45경 일몰을 보고, 바로 위 <b>산 미니아토 알 몬테 성당</b>(2025년 성탄절 15:30–18시)에 들릅니다. 그레고리오 성가 저녁기도(겨울 17:30경, 비공식)를 들으려면 조금 더 머무르세요.",
      "tags": []
     },
     {
      "id": "i1c",
-     "time": "17:45",
+     "time": "18:15",
      "text": "시내로 내려와 베키오 다리, 시뇨리아 광장, 두오모 광장 트리 야경.",
      "tags": []
     },
     {
      "id": "i1d",
      "time": "19:30",
-     "text": "저녁: <b>Trattoria Dall'Oste</b>(구글 4.7)의 비스테카. 평소 매일 열지만 25일 영업은 공지가 없어 예약을 시도해 확인하세요. 대안은 <b>Trattoria Pallottino</b>(4.6).",
+     "text": "가벼운 저녁: <b>Trattoria Dall'Oste</b>(4.7)에서 파스타나 토스카나 요리. 비스테카는 26일에 먹습니다. 25일 영업은 공지가 없어 예약을 시도해 확인하세요. 대안은 <b>Trattoria Pallottino</b>(4.6).",
      "tags": [
       [
        "tbd",
        "25일 영업 미확인"
+      ]
+     ]
+    },
+    {
+     "id": "ir21",
+     "time": "21:00",
+     "text": "(선택) <b>팔라초 스트로치</b> 기획전 \"Broken\"(2026.9.25–2027.1.24). 2025년에는 성탄절에도 10–23시에 열었습니다. 비가 오면 오전에 가도 됩니다.",
+     "tags": [
+      [
+       "tbd",
+       "2026년 성탄 운영 미확인"
       ]
      ]
     }
@@ -439,7 +455,7 @@
     {
      "id": "i1h",
      "time": "09:40",
-     "text": "피렌체 SMN에서 피사 중앙역(Pisa Centrale)행 지역열차, 약 1시간, 편도 약 €9. 좌석 지정이 없어 당일 앱이나 발권기에서 삽니다. 공휴일 시간표라 편수가 줄 수 있으니 12/13 새 시간표가 나온 뒤 앱에서 확인하세요.",
+     "text": "피렌체 SMN에서 피사 중앙역(Pisa Centrale)행 지역열차, 약 1시간, 편도 약 €9. 좌석 지정이 없어 당일 앱이나 발권기에서 삽니다. 공휴일 시간표라 편수가 줄 수 있으니, 사탑에 늦지 않게 한 편 일찍 타도 좋습니다.",
      "tags": [
       [
        "warn",
@@ -494,18 +510,18 @@
     {
      "id": "i1n",
      "time": "14:45",
-     "text": "역으로 가는 길에 메초 다리 북쪽 <b>La Bottega del Gelato</b>(4.7).",
+     "text": "메초 다리 북쪽 <b>La Bottega del Gelato</b>(4.7)에서 젤라토. 피사 중앙역까지 걸어서 약 17분.",
      "tags": []
     },
     {
      "id": "i1o",
-     "time": "15:15",
-     "text": "피사 중앙역에서 피렌체행 지역열차. 16:15경 도착.",
+     "time": "15:40",
+     "text": "피사 중앙역에서 피렌체행 지역열차. 16:40경 도착.",
      "tags": []
     },
     {
      "id": "i1p",
-     "time": "16:45",
+     "time": "17:00",
      "text": "아카데미아 미술관의 다비드상 €20 + 예약비 €4, 약 1시간. 2025년에는 12/26 18:50까지 열었고 최종 입장은 18:20입니다.",
      "tags": [
       [
@@ -516,7 +532,7 @@
     },
     {
      "id": "i1q",
-     "time": "18:00",
+     "time": "18:15",
      "text": "베키오 다리와 오르트라르노 강변 산책.",
      "tags": []
     },
@@ -577,15 +593,9 @@
      "tags": []
     },
     {
-     "id": "i1y",
+     "id": "ir22",
      "time": "12:00",
-     "text": "(선택) 도르소두로의 전통 제과점 <b>Pasticceria Tonolo</b>(구글 4.6). 일요일은 13시에 닫고 늦은 오전에는 품절이 많습니다.",
-     "tags": []
-    },
-    {
-     "id": "i1z",
-     "time": "12:30",
-     "text": "바포레토(수상버스) 48시간권 €35를 개시하면 12/29 오전 역으로 가는 배까지 쓸 수 있습니다. 탈 때마다 단말기에 태그하세요.",
+     "text": "바포레토(수상버스) 48시간권 €35를 개시하면 12/29 오전 역으로 가는 배까지 쓸 수 있습니다. <b>2번</b> 배를 타고 대운하를 따라 리알토까지 갑니다. 탈 때마다 단말기에 태그하세요.",
      "tags": []
     },
     {
@@ -628,9 +638,9 @@
      ]
     },
     {
-     "id": "i24",
+     "id": "ir23",
      "time": "21:30",
-     "text": "리알토 다리 야경을 보고 젤라토 <b>Suso</b>(4.6).",
+     "text": "리알토 다리 야경과 젤라토 <b>Suso</b>(4.6). 돌아갈 때는 리알토에서 <b>1번</b> 배를 타고 밤의 대운하를 따라 역까지 갑니다(48시간권 포함).",
      "tags": []
     }
    ],
@@ -658,7 +668,7 @@
     {
      "id": "i28",
      "time": "09:00",
-     "text": "두칼레 궁전 겨울 9–18시(최종 입장 17시). 코레르 박물관 입장이 포함됩니다. 비밀의 통로 투어(€40, 인원 제한)는 선택.",
+     "text": "두칼레 궁전. 겨울 9–18시(최종 입장 17시). 코레르 박물관 입장이 포함되고 11:10까지 봅니다. 비밀의 통로 투어(€40, 인원 제한)는 선택.",
      "tags": [
       [
        "book",
@@ -667,21 +677,21 @@
      ]
     },
     {
-     "id": "i29",
-     "time": "10:50",
+     "id": "ir24",
+     "time": "11:10",
      "text": "폰다멘테 노베 선착장까지 걸어서 약 20분.",
      "tags": []
     },
     {
-     "id": "i2a",
-     "time": "11:10",
-     "text": "12번 바포레토로 무라노를 거쳐 부라노까지 약 40분. 겨울 시간표(2026-11-02 시행)는 매시 10분·40분 출발이라 11:45 배는 없습니다.",
+     "id": "ir25",
+     "time": "11:40",
+     "text": "12번 바포레토로 무라노를 거쳐 부라노까지 약 40분. 겨울 시간표(2026-11-02 시행)는 매시 10분·40분 출발이라, 놓치면 12:10 배를 탑니다.",
      "tags": []
     },
     {
      "id": "i2b",
-     "time": "12:00",
-     "text": "부라노 점심: <b>Ristorantino Al Museo</b>(구글 4.7) 해산물 리소토, 바칼라 만테카토. 다리 건너 마조르보의 <b>Trattoria alla Maddalena</b>(4.6)도 좋습니다.",
+     "time": "12:30",
+     "text": "부라노 점심: <b>Ristorantino Al Museo</b>(4.7) 12:30 예약. 해산물 리소토, 바칼라 만테카토. 다리 건너 마조르보의 <b>Trattoria alla Maddalena</b>(4.6)도 좋습니다.",
      "tags": [
       [
        "book",
@@ -694,15 +704,21 @@
      ]
     },
     {
-     "id": "i2c",
-     "time": "13:30",
-     "text": "색색의 집이 늘어선 부라노 산책(구글 4.8).",
+     "id": "ir26",
+     "time": "13:45",
+     "text": "색색의 집이 늘어선 부라노 산책.",
      "tags": []
     },
     {
      "id": "i2d",
      "time": "15:25",
      "text": "부라노에서 12번 배로 폰다멘테 노베까지, 16:05경 도착. 무라노는 평점 4.5라 들르지 않습니다.",
+     "tags": []
+    },
+    {
+     "id": "ir27",
+     "time": "16:20",
+     "text": "폰다멘테 노베에서 리알토까지 걸어서 15분. 리알토에서 <b>1번</b>이나 <b>2번</b> 배로 아카데미아까지, 해 질 녘 대운하를 배에서 봅니다.",
      "tags": []
     },
     {
@@ -736,18 +752,18 @@
    "date": "2026-12-29",
    "city": "roma",
    "label": "",
-   "title": "로마로 돌아가 판테온과 트레비",
+   "title": "로마로 돌아가 카라바조와 산탄젤로 성",
    "items": [
     {
      "id": "i2i",
      "time": "07:45",
-     "text": "아침: 피아찰레 로마 쪽 <b>Pasticceria Tonolo</b>(4.6, 화 7:30부터)에서 크림 퍼프. 역까지 걸어서 15분. 대안은 게토의 <b>Panificio Volpe</b>(4.7).",
+     "text": "아침: 피아찰레 로마 쪽 <b>Pasticceria Tonolo</b>(4.6, 화 7:30부터)에서 크림 퍼프를 먹고, 기차에서 먹을 빵도 포장합니다. 대안은 게토의 <b>Panificio Volpe</b>(4.7).",
      "tags": []
     },
     {
      "id": "i2j",
      "time": "09:25",
-     "text": "베네치아 S. Lucia에서 로마 테르미니행 약 3시간 45분–4시간(시간은 예시). 역까지 가는 바포레토는 48시간권 유효시간 안입니다.",
+     "text": "베네치아 S. Lucia에서 로마 테르미니행 약 3시간 45분–4시간(시간은 예시). 점심은 기차에서 포장해 온 빵으로. 역까지 가는 바포레토는 48시간권 유효시간 안입니다.",
      "tags": [
       [
        "book",
@@ -768,9 +784,20 @@
      "tags": []
     },
     {
-     "id": "i2m",
+     "id": "ir28",
      "time": "14:30",
-     "text": "판테온 €7, 09–19시(최종 입장 18:30).",
+     "text": "<b>산 루이지 데이 프란체시</b> 성당(무료)에서 카라바조 그림 3점. 운영시간은 출처마다 달라 미확인입니다.",
+     "tags": [
+      [
+       "tbd",
+       "운영시간 미확인"
+      ]
+     ]
+    },
+    {
+     "id": "ir29",
+     "time": "15:00",
+     "text": "판테온 €7, 09–19시(최종 입장 18:30). 기차가 늦어도 되도록 15:00로 예약하세요.",
      "tags": [
       [
        "book",
@@ -779,15 +806,15 @@
      ]
     },
     {
-     "id": "i2n",
-     "time": "15:30",
-     "text": "젤라토: Via del Corso의 <b>Venchi</b>(4.7) 또는 트레비 바로 옆 <b>Gelateria Valentino</b>(4.7).",
+     "id": "ir2a",
+     "time": "15:50",
+     "text": "<b>산탄젤로 성</b> €18. 화요일 9–19:30(최종 입장 18:30). 꼭대기 테라스에서 16:40경 일몰과 성 베드로 대성당을 봅니다.",
      "tags": []
     },
     {
-     "id": "i2o",
-     "time": "16:00",
-     "text": "트레비 분수(수조 앞 구역 €2, 카드만, 이날은 11:30부터 유료)를 보고 스페인 계단까지 걷습니다.",
+     "id": "ir2b",
+     "time": "17:30",
+     "text": "나보나 광장 크리스마스 마켓 산책, 젤라토 <b>Gelateria del Teatro</b>(4.6).",
      "tags": []
     },
     {
@@ -824,20 +851,37 @@
      ]
     },
     {
-     "id": "i2t",
-     "time": "11:15",
-     "text": "핀초 언덕 테라스에서 포폴로 광장을 내려다보고 광장으로 내려갑니다.",
+     "id": "ir2c",
+     "time": "11:20",
+     "text": "핀초 언덕 테라스에서 포폴로 광장을 내려다봅니다.",
      "tags": []
     },
     {
-     "id": "i2u",
-     "time": "12:30",
-     "text": "점심: 포폴로 문 바로 밖 <b>Pastasciutta</b>(Piazzale Flaminio, 구글 4.6)의 생면 파스타. 메트로 A선 Flaminio역에서 테르미니까지 약 10분입니다.",
+     "id": "ir2d",
+     "time": "11:35",
+     "text": "<b>산타 마리아 델 포폴로</b> 성당(무료)에서 카라바조 그림 2점. 평일에는 12시 전후에 닫는다는 출처가 있어 11:45 전에 들어가세요.",
+     "tags": [
+      [
+       "tbd",
+       "운영시간 미확인"
+      ]
+     ]
+    },
+    {
+     "id": "ir2e",
+     "time": "12:15",
+     "text": "점심: 포폴로 문 바로 밖 <b>Pastasciutta</b>(Piazzale Flaminio, 4.6)의 생면 파스타.",
      "tags": []
     },
     {
-     "id": "i2v",
-     "time": "14:30",
+     "id": "ir2f",
+     "time": "13:15",
+     "text": "메트로 A선 Flaminio에서 Spagna로 가서 <b>스페인 계단</b>. 다시 A선으로 테르미니까지.",
+     "tags": []
+    },
+    {
+     "id": "ir2g",
+     "time": "14:15",
      "text": "호텔에서 짐을 찾습니다.",
      "tags": []
     },
@@ -871,7 +915,7 @@
     {
      "id": "c30",
      "label": "숙소 4곳: 로마 3박 + 1박, 피렌체 3박, 베네치아 2박",
-     "meta": "로마는 첫 3박과 마지막 1박을 같은 호텔로 잡으면 동선이 단순합니다. 연말 성수기라 빨리 찹니다. 숙박세는 현장에서 따로 냅니다. <a href=\"#stay\">추천 숙소 보기</a>",
+     "meta": "로마는 첫 3박과 마지막 1박을 같은 호텔로 잡으면 동선이 단순합니다. 피렌체는 성탄 아침 카페가 대부분 쉬니 조식 포함으로 잡으세요. 연말 성수기라 빨리 찹니다. 숙박세는 현장에서 따로 냅니다. <a href=\"#stay\">추천 숙소 보기</a>",
      "done": false
     },
     {
@@ -894,7 +938,7 @@
     },
     {
      "id": "c34",
-     "label": "아카데미아(다비드) · 12/26(토) 16:45",
+     "label": "아카데미아(다비드) · 12/26(토) 17:00",
      "meta": "€20 + 예약비 €4 · <a href=\"https://webshop.b-ticket.com\" target=\"_blank\" rel=\"noopener\">webshop.b-ticket.com</a> · 전화 +39 055 294883 · 최종 입장 18:20 · 12/25 휴관",
      "done": false
     },
@@ -918,8 +962,14 @@
     },
     {
      "id": "c38",
-     "label": "(선택) 판테온 · 12/29(화) 14:30",
+     "label": "(선택) 판테온 · 12/29(화) 15:00",
      "meta": "€7(2026년 7월부터) · 09–19시, 최종 18:30 · Musei Italiani 공식 앱·포털, 시간 지정",
+     "done": false
+    },
+    {
+     "id": "cr2h",
+     "label": "(선택) 산탄젤로 성 · 12/29(화) 15:50",
+     "meta": "€18 · Musei Italiani 공식 앱·포털 또는 현장 · 화 9–19:30, 최종 입장 18:30",
      "done": false
     }
    ]
@@ -949,7 +999,7 @@
     {
      "id": "c3d",
      "label": "피렌체 성탄 식당: Vini e Vecchi Sapori 12/24 저녁, I'Brindellone 12/25 점심, Dall'Oste 12/25 저녁",
-     "meta": "세 곳 모두 성탄 영업을 공식 확인하지 못했습니다. 예약하면서 확인하고, 안 되면 대안(Parione, Osteria dell'Enoteca, Pallottino)으로 잡으세요 · I'Brindellone 전화 +39 055 217879 · Dall'Oste 공식 사이트 예약",
+     "meta": "이탈리아는 성탄 점심을 크게 먹으니 점심 한 곳을 먼저 확정하고 저녁은 가볍게 잡으세요. 세 곳 모두 성탄 영업을 공식 확인하지 못했습니다. 안 되면 대안(Parione, Osteria dell'Enoteca, Pallottino) · I'Brindellone 전화 +39 055 217879 · Dall'Oste 공식 사이트 예약",
      "done": false
     },
     {
@@ -966,7 +1016,7 @@
     },
     {
      "id": "c3g",
-     "label": "베네치아: Alla Frasca 12/27 저녁, Al Museo 12/28 점심, Ai Cugnai 12/28 저녁",
+     "label": "베네치아: Alla Frasca 12/27 저녁, Al Museo 12/28 12:30 점심, Ai Cugnai 12/28 저녁",
      "meta": "Alla Frasca +39 041 241 2585 · Al Museo +39 041 735012 또는 홈페이지 · Ai Cugnai +39 041 528 9238 · 연말 휴무 여부를 같이 확인",
      "done": false
     },
@@ -1081,7 +1131,7 @@
      "name": "판테온",
      "book": "Musei Italiani · 시간 지정",
      "price": "약 €7",
-     "when": "12/29",
+     "when": "12/29 15:00",
      "info": "09–19시(최종 18:30), 12/25 휴관. 2026년 7월부터 €7",
      "tags": [],
      "memo": "",
@@ -1093,7 +1143,7 @@
      "name": "트레비 분수",
      "book": "현장 부스 · fontanaditrevi.roma.it",
      "price": "€2",
-     "when": "12/22·29",
+     "when": "12/22 밤",
      "info": "수조 앞 구역만 유료(카드만). 최종 입장 21:00, 22시 이후 무료. 12/29는 11:30부터 유료",
      "tags": [],
      "memo": "",
@@ -1117,12 +1167,46 @@
      "name": "산탄젤로 성",
      "book": "현장·온라인",
      "price": "€18",
-     "when": "선택",
-     "info": "월요일 휴관",
+     "when": "12/29 15:50",
+     "info": "화요일 9–19:30(최종 입장 18:30, 문화부 공지). 월요일 휴관. 꼭대기 테라스에서 일몰 전망",
      "tags": [],
      "memo": "",
      "mapQ": "산탄젤로 성 로마",
      "naverQ": "로마 산탄젤로 성"
+    },
+    {
+     "id": "sr2i",
+     "name": "산 루이지 데이 프란체시",
+     "book": "필요 없음",
+     "price": "무료",
+     "when": "12/29 14:30",
+     "info": "카라바조의 성 마태오 연작 3점. 운영시간은 출처마다 달라 미확인",
+     "tags": [
+      [
+       "tbd",
+       "운영시간 미확인"
+      ]
+     ],
+     "memo": "",
+     "mapQ": "San Luigi dei Francesi Roma",
+     "naverQ": "로마 산 루이지 데이 프란체시 카라바조"
+    },
+    {
+     "id": "sr2j",
+     "name": "산타 마리아 델 포폴로",
+     "book": "필요 없음",
+     "price": "무료",
+     "when": "12/30 11:35",
+     "info": "카라바조 2점(체라시 예배당). 평일 12시 전후에 닫는다는 출처가 있음",
+     "tags": [
+      [
+       "tbd",
+       "운영시간 미확인"
+      ]
+     ],
+     "memo": "",
+     "mapQ": "Santa Maria del Popolo Roma",
+     "naverQ": "로마 산타 마리아 델 포폴로 카라바조"
     }
    ],
    "food": [
@@ -1525,7 +1609,7 @@
      "id": "p4e",
      "name": "Gelateria del Teatro",
      "area": "나보나 근처",
-     "when": "12/22 간식",
+     "when": "12/22 간식 · 12/29 17:30",
      "rating": "4.6",
      "reviews": "4,159",
      "what": "과일과 허브를 쓴 독특한 맛",
@@ -1600,7 +1684,7 @@
      "id": "p4i",
      "name": "Venchi (Via del Corso)",
      "area": "콜론나 광장 근처 · Via del Corso 335",
-     "when": "12/29 15:30",
+     "when": "",
      "rating": "4.7",
      "reviews": "21,647",
      "what": "초콜릿 브랜드의 젤라테리아. 초콜릿 폭포 벽, 초콜릿·잔두야 계열 맛",
@@ -1619,7 +1703,7 @@
      "id": "p4j",
      "name": "Gelateria Valentino",
      "area": "트레비 바로 옆 · Via del Lavatore 96",
-     "when": "12/29 대안",
+     "when": "",
      "rating": "4.7",
      "reviews": "2,303",
      "what": "사르데냐 향(Profumo di Sardegna), 페레로로쉐 맛이 대표",
@@ -1756,6 +1840,23 @@
      "memo": "",
      "mapQ": "성탄절에 여는 성당 피렌체",
      "naverQ": "피렌체 성탄절에 여는 성당"
+    },
+    {
+     "id": "sr2k",
+     "name": "팔라초 스트로치 기획전",
+     "book": "palazzostrozzi.org",
+     "price": "전시마다 다름",
+     "when": "12/25 (선택)",
+     "info": "기획전 \"Broken\" 2026.9.25–2027.1.24. 2025년에는 성탄절에도 10–23시 운영",
+     "tags": [
+      [
+       "tbd",
+       "2026년 성탄 운영 미확인"
+      ]
+     ],
+     "memo": "",
+     "mapQ": "Palazzo Strozzi Firenze",
+     "naverQ": "피렌체 팔라초 스트로치 전시"
     }
    ],
    "food": [
@@ -2506,7 +2607,7 @@
      "id": "p5o",
      "name": "Ristorantino Al Museo",
      "area": "부라노 · 레이스 박물관 옆 Piazza Galuppi 113",
-     "when": "12/28 점심",
+     "when": "12/28 12:30",
      "rating": "4.7",
      "reviews": "1,149",
      "what": "부라노 해산물. 리소토, 해산물 튀김, 바칼라 만테카토, 봉골레. 온열 램프가 있는 파티오",
@@ -2751,7 +2852,7 @@
      "id": "p5x",
      "name": "Pasticceria Tonolo",
      "area": "도르소두로 · Calle San Pantalon 3764",
-     "when": "12/27 낮 · 12/29 아침",
+     "when": "12/29 아침·포장",
      "rating": "4.6",
      "reviews": "3,043",
      "what": "베네치아 대표 노포 제과점. 크림 퍼프, 초콜릿 코르네토. 카운터에서 먹고 나중에 계산합니다. 저렴",
@@ -2852,7 +2953,7 @@
    "title": "숙소",
    "sub": "지역 추천과 호텔 후보, 숙박세",
    "icon": "bed",
-   "html": "<p class=\"lead\">세 도시 모두 기차역 근처를 골랐습니다. 짐을 끌고 이동하는 날이 네 번이기 때문입니다. 평점은 HotelsCombined·KAYAK 집계(10점 만점)이고, 가격은 11월 날짜 1박 샘플이라 12월 말에는 더 비쌉니다. 숙박세는 1인 1박 기준으로 현장에서 따로 냅니다.</p> <div class=\"hotels\"> <div class=\"hcol\" data-city=\"roma\"> <h3>로마 · 3박 + 1박</h3> <p class=\"area-pick\"><b>테르미니 서쪽(레푸블리카, Via Firenze·Torino)</b>을 권합니다. 12/24·12/29 기차와 공항철도가 모두 테르미니에서 출발합니다. 첫 3박과 마지막 1박을 같은 호텔로 잡으면 편합니다. 역 남쪽(에스퀼리노)은 밤 분위기가 좋지 않습니다.</p> <div class=\"hotel\"><span class=\"hn\">iQ Hotel Roma <span class=\"tag ok\">추천</span></span><span class=\"hm\">4성 · Via Firenze 8 · 9.4 (4,012) · ₩213,000~</span><p>역 서쪽이라 비교적 조용하고 시설이 새것입니다.</p></div> <div class=\"hotel\"><span class=\"hn\">The Hive Hotel</span><span class=\"hm\">4성 · Via Torino 6 · 8.7 (7,100) · ₩171,000~211,000</span><p>테르미니 도보 5분대, 루프탑 바.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Grifo</span><span class=\"hm\">3성 · 몬티 · 9.0 (3,361) · ₩155,000~180,000</span><p>콜로세움까지 걸어가는 가성비 숙소. 역까지 10–15분 언덕길이 단점입니다.</p></div> <div class=\"hotel\"><span class=\"hn\">Albergo del Senato</span><span class=\"hm\">판테온 앞 · 9.1 (1,307) · ₩184,000~513,000</span><p>성탄 동선은 최고지만 역에서 멀어 짐 이동이 번거롭습니다.</p></div> <p class=\"tax\">숙박세: 3성 €6, 4성 €7.50, 5성 €10. 4성 2인 4박이면 €60.</p> </div> <div class=\"hcol\" data-city=\"firenze\"> <h3>피렌체 · 3박</h3> <p class=\"area-pick\"><b>SMN역과 두오모 사이(Via della Scala, SMN 광장)</b>를 권합니다. 중앙시장과 주요 식당이 도보권입니다. Via Nazionale, Via Faenza 쪽은 밤에 다소 어수선합니다.</p> <div class=\"hotel\"><span class=\"hn\">C-Hotel Ambasciatori <span class=\"tag ok\">추천</span></span><span class=\"hm\">SMN역 정면 · 8.9 (12,083) · ₩227,000~</span><p>공식 웹으로 예약하면 체크아웃 후 짐 보관과 13시 레이트 체크아웃(가능할 때).</p></div> <div class=\"hotel\"><span class=\"hn\">C-Hotels Diplomat</span><span class=\"hm\">SMN 도보권 · 9.2 (5,652) · ₩240,000~</span><p>같은 그룹, 같은 혜택.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Adler Cavalieri</span><span class=\"hm\">4성 · Via della Scala 40 · 8.9 (4,271) · ₩259,000~</span><p>역과 두오모 사이. 사우나, 24시간 프런트.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Santa Maria Novella</span><span class=\"hm\">4성 · SMN 광장 · 9.3 (2,446) · ₩500,000~</span><p>상위 예산.</p></div> <p class=\"tax\">숙박세: 3성 €6, 4성 €7, 5성 €8. 4성 2인 3박이면 €42.</p> </div> <div class=\"hcol\" data-city=\"venezia\"> <h3>베네치아 · 2박</h3> <p class=\"area-pick\"><b>산타 루치아역 근처 카나레조, 산타 크로체</b>를 권합니다. 다리를 거의 건너지 않고 짐을 옮길 수 있습니다. 메스트레는 싸지만 매번 기차를 타야 하고 밤 풍경을 놓칩니다.</p> <div class=\"hotel\"><span class=\"hn\">Hotel Antiche Figure <span class=\"tag ok\">추천</span></span><span class=\"hm\">3성 · 역 맞은편 · 9.3 (2,283) · ₩168,000~</span><p>역에서 대운하 건너 바로 앞입니다.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Abbazia</span><span class=\"hm\">3성 · 역 0.3km · 9.0 (5,598) · ₩148,000~</span><p>역에서 가깝고 리뷰가 많습니다.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Al Ponte Mocenigo</span><span class=\"hm\">3성 · 리알토 0.5km · 9.3 (1,593) · ₩117,000~</span><p>가성비 좋고 리알토와 가깝습니다. 역에서 1km라 짐 이동은 조금 깁니다.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Moresco</span><span class=\"hm\">4성 · 피아찰레 로마 근처 · 9.6 (1,690) · ₩236,000~</span><p>평점이 가장 높은 상위 예산 선택지.</p></div> <p class=\"tax\">숙박세(12월 성수기, 본섬): 3성 €3.50, 4성 €4.50. 2025년 4월 요금표 기준.</p> </div> </div>"
+   "html": "<p class=\"lead\">세 도시 모두 기차역 근처를 골랐습니다. 짐을 끌고 이동하는 날이 네 번이기 때문입니다. 평점은 HotelsCombined·KAYAK 집계(10점 만점)이고, 가격은 11월 날짜 1박 샘플이라 12월 말에는 더 비쌉니다. 숙박세는 1인 1박 기준으로 현장에서 따로 냅니다.</p> <div class=\"hotels\"> <div class=\"hcol\" data-city=\"roma\"> <h3>로마 · 3박 + 1박</h3> <p class=\"area-pick\"><b>테르미니 서쪽(레푸블리카, Via Firenze·Torino)</b>을 권합니다. 12/24·12/29 기차와 공항철도가 모두 테르미니에서 출발합니다. 첫 3박과 마지막 1박을 같은 호텔로 잡으면 편합니다. 역 남쪽(에스퀼리노)은 밤 분위기가 좋지 않습니다.</p> <div class=\"hotel\"><span class=\"hn\">iQ Hotel Roma <span class=\"tag ok\">추천</span></span><span class=\"hm\">4성 · Via Firenze 8 · 9.4 (4,012) · ₩213,000~</span><p>역 서쪽이라 비교적 조용하고 시설이 새것입니다.</p></div> <div class=\"hotel\"><span class=\"hn\">The Hive Hotel</span><span class=\"hm\">4성 · Via Torino 6 · 8.7 (7,100) · ₩171,000~211,000</span><p>테르미니 도보 5분대, 루프탑 바.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Grifo</span><span class=\"hm\">3성 · 몬티 · 9.0 (3,361) · ₩155,000~180,000</span><p>콜로세움까지 걸어가는 가성비 숙소. 역까지 10–15분 언덕길이 단점입니다.</p></div> <div class=\"hotel\"><span class=\"hn\">Albergo del Senato</span><span class=\"hm\">판테온 앞 · 9.1 (1,307) · ₩184,000~513,000</span><p>성탄 동선은 최고지만 역에서 멀어 짐 이동이 번거롭습니다.</p></div> <p class=\"tax\">숙박세: 3성 €6, 4성 €7.50, 5성 €10. 4성 2인 4박이면 €60.</p> </div> <div class=\"hcol\" data-city=\"firenze\"> <h3>피렌체 · 3박</h3> <p class=\"area-pick\"><b>SMN역과 두오모 사이(Via della Scala, SMN 광장)</b>를 권합니다. 중앙시장과 주요 식당이 도보권입니다. Via Nazionale, Via Faenza 쪽은 밤에 다소 어수선합니다. 성탄절 아침에는 카페가 거의 쉬니 조식 포함으로 예약하세요.</p> <div class=\"hotel\"><span class=\"hn\">C-Hotel Ambasciatori <span class=\"tag ok\">추천</span></span><span class=\"hm\">SMN역 정면 · 8.9 (12,083) · ₩227,000~</span><p>공식 웹으로 예약하면 체크아웃 후 짐 보관과 13시 레이트 체크아웃(가능할 때).</p></div> <div class=\"hotel\"><span class=\"hn\">C-Hotels Diplomat</span><span class=\"hm\">SMN 도보권 · 9.2 (5,652) · ₩240,000~</span><p>같은 그룹, 같은 혜택.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Adler Cavalieri</span><span class=\"hm\">4성 · Via della Scala 40 · 8.9 (4,271) · ₩259,000~</span><p>역과 두오모 사이. 사우나, 24시간 프런트.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Santa Maria Novella</span><span class=\"hm\">4성 · SMN 광장 · 9.3 (2,446) · ₩500,000~</span><p>상위 예산.</p></div> <p class=\"tax\">숙박세: 3성 €6, 4성 €7, 5성 €8. 4성 2인 3박이면 €42.</p> </div> <div class=\"hcol\" data-city=\"venezia\"> <h3>베네치아 · 2박</h3> <p class=\"area-pick\"><b>산타 루치아역 근처 카나레조, 산타 크로체</b>를 권합니다. 다리를 거의 건너지 않고 짐을 옮길 수 있습니다. 메스트레는 싸지만 매번 기차를 타야 하고 밤 풍경을 놓칩니다.</p> <div class=\"hotel\"><span class=\"hn\">Hotel Antiche Figure <span class=\"tag ok\">추천</span></span><span class=\"hm\">3성 · 역 맞은편 · 9.3 (2,283) · ₩168,000~</span><p>역에서 대운하 건너 바로 앞입니다.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Abbazia</span><span class=\"hm\">3성 · 역 0.3km · 9.0 (5,598) · ₩148,000~</span><p>역에서 가깝고 리뷰가 많습니다.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Al Ponte Mocenigo</span><span class=\"hm\">3성 · 리알토 0.5km · 9.3 (1,593) · ₩117,000~</span><p>가성비 좋고 리알토와 가깝습니다. 역에서 1km라 짐 이동은 조금 깁니다.</p></div> <div class=\"hotel\"><span class=\"hn\">Hotel Moresco</span><span class=\"hm\">4성 · 피아찰레 로마 근처 · 9.6 (1,690) · ₩236,000~</span><p>평점이 가장 높은 상위 예산 선택지.</p></div> <p class=\"tax\">숙박세(12월 성수기, 본섬): 3성 €3.50, 4성 €4.50. 2025년 4월 요금표 기준.</p> </div> </div>"
   },
   {
    "id": "care",
@@ -2868,5 +2969,7 @@
    "icon": "book",
    "html": "<ul class=\"plain\"> <li><b>네이버 블로그:</b> 조사 환경에서 blog.naver.com과 search.naver.com 접근이 막혀 직접 읽지 못했습니다. 한국어 후기는 트립스토어, 브런치, 클리앙, 디시, 디에디트, 다음, 야놀자, 트립닷컴, polle에서 가져왔고, 각 카드에 출처를 적었습니다. 카드의 '네이버 블로그 후기' 버튼으로 최신 후기를 확인하세요.</li> <li><b>구글 평점:</b> Wanderlog와 Restaurant Guru에 표시된 구글 지도 수치(2026년 10–11월)입니다. 실제 지도 앱 수치와 조금 다를 수 있습니다.</li> <li><b>공식 출처:</b> <a href=\"https://www.museivaticani.va\" target=\"_blank\" rel=\"noopener\">바티칸 박물관</a>, <a href=\"https://colosseo.it/en/visit/opening-times-and-tickets/\" target=\"_blank\" rel=\"noopener\">콜로세움 고고학 공원</a>, <a href=\"https://www.basilicasanmarco.it/\" target=\"_blank\" rel=\"noopener\">산마르코 대성당 요금표</a>, <a href=\"https://palazzoducale.visitmuve.it/en/visitor-information/\" target=\"_blank\" rel=\"noopener\">두칼레 궁전</a>, <a href=\"https://www.feelflorence.it/\" target=\"_blank\" rel=\"noopener\">피렌체 관광청 박물관 운영표(2026-06)</a>, <a href=\"https://www.feelflorence.it/sites/default/files/2025-12/Orari%20Natale%202025.pdf\" target=\"_blank\" rel=\"noopener\">피렌체 2025 성탄 운영표</a>, <a href=\"https://duomo.firenze.it/it/news/11347/chiusure-dei-monumenti-nel-periodo-natalizio\" target=\"_blank\" rel=\"noopener\">두오모 성탄 휴관 공지</a>, <a href=\"https://www.opapisa.it/en/tickets/a-few-words-of-advice-before-you-buy-your-ticket/\" target=\"_blank\" rel=\"noopener\">피사 사탑 이용 규정</a>, <a href=\"https://www.opapisa.it/en/opening-and-closing-time/action~month/exact_date~1-12-2026/\" target=\"_blank\" rel=\"noopener\">피사 2026년 12월 운영 달력</a>, <a href=\"https://www.museivaticani.va/content/dam/museivaticani/pdf/utilities/calendario_musei.pdf\" target=\"_blank\" rel=\"noopener\">바티칸 박물관 2026 달력</a>, <a href=\"https://www.basilicasanpietro.va/it/orari\" target=\"_blank\" rel=\"noopener\">성 베드로 대성당 시간</a>, <a href=\"https://www.fontanaditrevi.roma.it\" target=\"_blank\" rel=\"noopener\">트레비 분수</a>, <a href=\"https://actv.avmspa.it/sites/default/files/avm/navigazione/Actv_nav_linea_12.pdf\" target=\"_blank\" rel=\"noopener\">ACTV 12번 시간표</a>, <a href=\"https://www.trenitalia.com/en/services/leonardo-express.html\" target=\"_blank\" rel=\"noopener\">Leonardo Express</a>, <a href=\"https://www.adr.it/pax-fco-taxi\" target=\"_blank\" rel=\"noopener\">공항 택시 요금</a>, <a href=\"https://www.atac.roma.it/en/tickets-and-passes/tickets\" target=\"_blank\" rel=\"noopener\">ATAC 요금</a>, <a href=\"https://www.at-bus.it/en/ticket\" target=\"_blank\" rel=\"noopener\">피렌체 버스</a>, <a href=\"https://home-affairs.ec.europa.eu/policies/schengen/smart-borders/entry-exit-system_en\" target=\"_blank\" rel=\"noopener\">EU EES</a>, <a href=\"https://overseas.mofa.go.kr/it-ko/brd/m_24772/view.do?seq=1330070\" target=\"_blank\" rel=\"noopener\">주이탈리아 대사관</a>.</li> <li><b>2026년 공식 정보가 없어 2025년 기준을 쓴 것:</b> 피렌체 성탄 운영시간(관광안내소 2025년 12/24–26 표), 두오모 성탄 전야 미사(2024년 23:00), 나보나 마켓, 베네치아 바포레토 요금, 곤돌라 요금, 베네치아 숙박세, 바티칸 박물관 가격(2024).</li> <li><b>피사:</b> 사탑 공식 가격표가 이미지라 읽지 못해서 €20은 그동안의 공시가와 여행 사이트 기준입니다. 12월과 12/26 공휴일 운영시간, 피렌체–피사 운임, LAM Rossa 요금도 여행 사이트 기준이라 결제 화면과 현지에서 확인하세요.</li> <li><b>평점 기준:</b> 식당·카페·젤라토는 구글 평점 4.6 이상, 리뷰 300개 이상인 곳만 남겼습니다. 수치는 Wanderlog·Restaurant Guru에 표시된 구글 값(2026년 11월)이라 지도 앱과 조금 다를 수 있습니다. 명소는 콘타리니 델 보볼로(4.5)와 무라노(4.5)를 뺐고 나머지는 모두 4.6 이상입니다.</li> <li><b>숙소:</b> HotelsCombined(로마·베네치아)와 KAYAK(피렌체) 집계 평점과 11월 샘플 가격입니다.</li> </ul>"
   }
- ]
+ ],
+ "updatedAt": 1793778599531,
+ "updatedBy": "YeonySon"
 }
