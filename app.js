@@ -133,7 +133,8 @@
     if (r.sha) {
       if (r.sha === remote.sha) { remote.etag = r.etag; writeCache(cache ? cache.data : r.plan); return; }
       remote.sha = r.sha; remote.etag = r.etag;
-    } else if (cache && JSON.stringify(cache.data) === JSON.stringify(r.plan)) return;
+    } else if (cache && (JSON.stringify(cache.data) === JSON.stringify(r.plan) ||
+        (r.plan.updatedAt || 0) < (cache.data.updatedAt || 0))) return; // 사이트 쪽 캐시가 더 오래된 내용이면 무시
     writeCache(r.plan);
     if (dirty) { setSync('dirty'); return; }
     var next = normalize(clone(r.plan));
