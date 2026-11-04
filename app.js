@@ -9,7 +9,7 @@
   var CAT_LABEL = { sight: '명소', food: '식당', cafe: '카페', gelato: '젤라토' };
   var TAG_TYPES = [['book', '예약'], ['warn', '주의'], ['ok', '확인'], ['info', '정보'], ['tbd', '미확인']];
   var TAG_OK = { book: 1, warn: 1, ok: 1, info: 1, tbd: 1 };
-  var TITLES = { plan: '일정', check: '예약·준비', places: '장소', info: '정보' };
+  var TITLES = { plan: '일정', check: '예약·준비', places: '장소', money: '경비·환율', info: '정보' };
   var WD = ['일', '월', '화', '수', '목', '금', '토'];
 
   var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
@@ -29,6 +29,14 @@
       if (!isObj(d) || !isArr(d.days, 120) || !isArr(d.checklist, 100) || !isObj(d.places) || !isArr(d.guides, 100)) return false;
       if (d.trip != null && !(isObj(d.trip) && optStr(d.trip.title, 200) && optStr(d.trip.summary) && optStr(d.trip.assume))) return false;
       if (d.cities != null && !(isObj(d.cities) && Object.keys(d.cities).every(function (k) { return isObj(d.cities[k]) && optStr(d.cities[k].name, 50); }))) return false;
+      if (d.expenses != null && !(isObj(d.expenses) && isArr(d.expenses.people, 6) && d.expenses.people.every(function (p) { return isStr(p, 20); }) &&
+        isArr(d.expenses.items, 3000) && d.expenses.items.every(function (x) {
+          return isObj(x) && optStr(x.title, 100) && optStr(x.date, 10) && optStr(x.cat, 20) && (x.cur === 'EUR' || x.cur === 'KRW') &&
+            typeof x.amount === 'number' && isFinite(x.amount) && x.amount >= 0 && x.amount < 1e9 &&
+            (x.rate == null || (typeof x.rate === 'number' && isFinite(x.rate) && x.rate > 0 && x.rate < 1e5)) &&
+            Number.isInteger(x.payer) && x.payer >= 0 && x.payer < 6 &&
+            isArr(x.split, 6) && x.split.every(function (i) { return Number.isInteger(i) && i >= 0 && i < 6; });
+        }))) return false;
       if (d.route != null && !(isArr(d.route, 50) && d.route.every(function (r) { return isObj(r) && optStr(r.city, 20) && optStr(r.name, 100) && optStr(r.nights, 200) && optStr(r.leg, 200); }))) return false;
       var days = d.days.every(function (x) {
         return isObj(x) && isStr(x.date, 10) && /^\d{4}-\d{2}-\d{2}$/.test(x.date) && isStr(x.city, 20) && optStr(x.label, 50) && optStr(x.title, 300) &&
@@ -74,12 +82,23 @@
       day.items.forEach(function (it) { it.id = it.id || uid('i'); it.tags = Array.isArray(it.tags) ? it.tags : []; it.time = it.time || ''; it.text = it.text || ''; });
     });
     d.checklist.forEach(function (g) { g.id = g.id || uid('g'); g.items = Array.isArray(g.items) ? g.items : []; });
+    var ex = d.expenses = isObj(d.expenses) ? d.expenses : {};
+    ex.people = Array.isArray(ex.people) && ex.people.length >= 2 ? ex.people.slice(0, 6) : ['나', '동행'];
+    ex.items = Array.isArray(ex.items) ? ex.items : [];
+    ex.items.forEach(function (x) {
+      x.id = x.id || uid('e');
+      if (x.payer >= ex.people.length) x.payer = 0;
+      x.split = (Array.isArray(x.split) ? x.split : []).filter(function (i) { return i < ex.people.length; });
+      if (!x.split.length) x.split = ex.people.map(function (_, i) { return i; });
+    });
     return d;
   }
   /* ---------------- shared plan on GitHub ----------------
      모든 사람은 GitHub 저장소의 plan.json을 읽는다. 토큰을 넣은 편집자만 고칠 수 있고,
      고친 내용은 기기에 먼저 남긴 뒤 몇 초 뒤 plan.json에 커밋한다. 쓰기 권한은 GitHub 서버가 확인한다. */
-  var REPO = { owner: 'YeonySon', name: 'italy-trip-2026', path: 'plan.json', branch: 'main' };
+  // 일정은 앱 코드와 분리된 데이터 전용 저장소에 둔다. 편집 토큰은 이 저장소에만 쓰기 권한을 준다.
+  var REPO = { owner: 'YeonySon', name: 'italy-trip-2026-data', path: 'plan.json', branch: 'main' };
+  var RAW_URL = 'https://raw.githubusercontent.com/' + REPO.owner + '/' + REPO.name + '/' + REPO.branch + '/' + REPO.path;
   var API = 'https://api.github.com/repos/' + REPO.owner + '/' + REPO.name;
   var K = { cache: 'italy2026.plan.v2', draft: 'italy2026.draft.v2', token: 'italy2026.token.v1', editor: 'italy2026.editor.v1' };
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -163,16 +182,16 @@
     return fetch(contentsUrl + '?ref=' + REPO.branch, opt).then(function (res) {
       if (res.status === 304) return null;
       if (res.status === 401 && token) { setSync('auth'); return null; }
-      if (!res.ok) return fetchSameOrigin();
+      if (!res.ok) return fetchRaw();
       var etag = res.headers.get('ETag');
       return res.json().then(function (j) { return { plan: JSON.parse(b64decode(j.content)), sha: j.sha, etag: etag }; });
     }).then(function (r) { return r ? applyRemote(r) : false; })
       .catch(function () { return null; /* 오프라인이면 갖고 있는 일정을 그대로 쓴다 */ })
       .then(function (changed) { fetching = false; return changed; });
   }
-  // API 호출 한도에 걸렸을 때는 같은 사이트의 plan.json으로 대신 확인한다.
-  function fetchSameOrigin() {
-    return fetch('plan.json?t=' + Date.now(), { cache: 'no-store' }).then(function (res) {
+  // API 호출 한도(비로그인 시간당 60회)에 걸리면 raw 파일로 대신 받는다(최대 몇 분 늦을 수 있음).
+  function fetchRaw() {
+    return fetch(RAW_URL, { cache: 'no-store' }).then(function (res) {
       return res.ok ? res.json().then(function (plan) { return { plan: plan, sha: null, etag: null }; }) : null;
     }).catch(function () { return null; });
   }
@@ -364,6 +383,11 @@
     nav: '<path d="M12 2.8l9.2 9.2-9.2 9.2L2.8 12z"/><path d="M9.3 13.3v-2.6h5.2M12.8 8.5l1.9 2.2-1.9 2.2"/>',
     call: '<path d="M5 4.5h3.2l1.5 4-2 1.3a10 10 0 005 5l1.3-2 4 1.5v3.2a1.6 1.6 0 01-1.7 1.6A15.7 15.7 0 013.4 6.2 1.6 1.6 0 015 4.5z"/>',
     ext: '<path d="M14 4.5h5.5V10M19.5 4.5L11 13M17 14v4.5a1 1 0 01-1 1H5.5a1 1 0 01-1-1V8a1 1 0 011-1H10"/>',
+    wallet: '<rect x="3.5" y="6" width="17" height="13" rx="3"/><path d="M3.5 10.5h17M15.5 14.8h2"/><path d="M6.5 6l8.5-2.5 1.2 2.5"/>',
+    cloud: '<path d="M7 18.5h10a4 4 0 00.4-8 5.5 5.5 0 00-10.6-1.3A4.7 4.7 0 007 18.5z"/>',
+    rain: '<path d="M7 14.5h10a3.6 3.6 0 00.4-7.2 5 5 0 00-9.6-1.2A4.3 4.3 0 007 14.5z"/><path d="M9 17.5l-1 2.5M13 17.5l-1 2.5M17 17.5l-1 2.5"/>',
+    snow: '<path d="M7 14.5h10a3.6 3.6 0 00.4-7.2 5 5 0 00-9.6-1.2A4.3 4.3 0 007 14.5z"/><path d="M9 18v.1M13 18v.1M17 18v.1M11 20.8v.1M15 20.8v.1"/>',
+    fog: '<path d="M4 8.5h16M6 12.5h12M4 16.5h16"/>',
     grip: '<circle cx="9" cy="6.5" r="1.1"/><circle cx="15" cy="6.5" r="1.1"/><circle cx="9" cy="12" r="1.1"/><circle cx="15" cy="12" r="1.1"/><circle cx="9" cy="17.5" r="1.1"/><circle cx="15" cy="17.5" r="1.1"/>'
   };
   function icon(name, size) {
@@ -688,6 +712,7 @@
     if (ui.tab === 'check') return viewCheck();
     if (ui.tab === 'places') return viewPlaces();
     if (ui.tab === 'info') return ui.guide ? viewGuide() : viewInfo();
+    if (ui.tab === 'money') return viewMoney();
     return viewPlan();
   }
   function go(tab) {
@@ -704,7 +729,7 @@
       g ? h('button', { class: 'back-btn', 'aria-label': '정보로 돌아가기', onclick: closeGuide }, icon('chevL', 24), '정보') : null,
       h('h1', { class: g ? 'sm' : '' }, g ? '' : TITLES[ui.tab]),
       isEditor() ? h('button', { class: 'sync-pill', onclick: function () { if (dirty) publish(); } }) : null,
-      isEditor() ? h('button', { class: 'edit-btn' + (ui.edit ? ' on' : ''), 'aria-pressed': String(ui.edit), onclick: toggleEdit },
+      isEditor() && ui.tab !== 'money' ? h('button', { class: 'edit-btn' + (ui.edit ? ' on' : ''), 'aria-pressed': String(ui.edit), onclick: toggleEdit },
         ui.edit ? '완료' : [icon('pencil', 15), '편집']) : null
     );
     var pill = bar.querySelector('.sync-pill');
@@ -727,7 +752,7 @@
   function tabbar() {
     var left = 0;
     data.checklist.forEach(function (g) { g.items.forEach(function (i) { if (!i.done) left++; }); });
-    var tabs = [['plan', '일정', 'calendar'], ['check', '예약', 'checks'], ['places', '장소', 'pin'], ['info', '정보', 'compass']];
+    var tabs = [['plan', '일정', 'calendar'], ['check', '예약', 'checks'], ['places', '장소', 'pin'], ['money', '경비', 'wallet'], ['info', '정보', 'compass']];
     return h('nav', { class: 'tabbar', 'aria-label': '메뉴' }, h('div', { class: 'tabbar-in' }, tabs.map(function (t) {
       return h('button', { class: 'tab' + (ui.tab === t[0] ? ' on' : ''), 'aria-current': ui.tab === t[0] ? 'page' : null, onclick: function () { go(t[0]); } },
         icon(t[2], 25), t[1], t[0] === 'check' && left ? h('span', { class: 'badge' }, left > 99 ? '99+' : left) : null);
@@ -802,7 +827,7 @@
         icon('chevR', 16)));
     }
     out.push(h('section', { class: 'day-head' + (ui.edit ? ' editable' : ''), 'data-city': d.city, onclick: ui.edit ? function () { editDay(di); } : null },
-      h('div', { class: 'dh-top' }, h('span', { class: 'city-pill' }, d.label || cityName(d.city)), h('span', null, fmtLong(d.date))),
+      h('div', { class: 'dh-top' }, h('span', { class: 'city-pill' }, d.label || cityName(d.city)), h('span', null, fmtLong(d.date)), wxBadge(d)),
       h('h2', { class: 'dh-title' }, d.title || '제목 없음'),
       editIc()));
     if (d.items.length) {
@@ -1023,6 +1048,249 @@
       ui.edit && !inSearch ? dragHandle(p.name, function (from, to) { moveInArray(data.places[c][cat], from, to); save(); render(true); }) : null);
   }
 
+  /* ---------------- weather (Open-Meteo, 키 없이 무료) ----------------
+     예보는 약 16일 앞까지만 나온다. 그 전에는 12월 평년 기온(1991–2020)을 보여 준다. 피사는 피렌체 평년값을 쓴다. */
+  var COORD = { roma: [41.9028, 12.4964], firenze: [43.7696, 11.2558], pisa: [43.7228, 10.4017], venezia: [45.4408, 12.3155] };
+  var NORMAL = { roma: [12.7, 4.7], firenze: [11.4, 2.6], pisa: [11.4, 2.6], venezia: [8.3, 1.0] };
+  var K_WX = 'italy2026.wx.v1', K_FX = 'italy2026.fx.v1';
+  var wx = readJSON(K_WX);
+  if (!isObj(wx) || !isObj(wx.days)) wx = { at: 0, days: {} };
+  function wxIcon(c) {
+    if (c === 0 || c === 1) return 'sun';
+    if (c === 45 || c === 48) return 'fog';
+    if ((c >= 71 && c <= 77) || c === 85 || c === 86) return 'snow';
+    if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95) return 'rain';
+    return 'cloud';
+  }
+  function wxBadge(d) {
+    var k = d.date + '|' + d.city, f = own(wx.days, k) ? wx.days[k] : null;
+    if (f) {
+      return h('span', { class: 'wx', title: '일기예보 (Open-Meteo)' }, icon(wxIcon(f.code), 16),
+        Math.round(f.max) + '° / ' + Math.round(f.min) + '°', f.pop != null ? h('small', null, '비 ' + f.pop + '%') : null);
+    }
+    var n = own(NORMAL, d.city) ? NORMAL[d.city] : null;
+    return n ? h('span', { class: 'wx norm', title: '12월 평년 기온. 예보는 여행 약 2주 전부터 나옵니다' }, '평년 ' + Math.round(n[0]) + '° / ' + Math.round(n[1]) + '°') : null;
+  }
+  function fetchWeather() {
+    if (!data.days.length || Date.now() - (wx.at || 0) < 3 * 3600 * 1000) return;
+    var today = pd(todayStr()), first = pd(data.days[0].date), last = pd(data.days[data.days.length - 1].date);
+    if (today > last || (first - today) / 86400000 > 15) return; // 아직 예보 범위 밖
+    var horizon = new Date(today.getTime()); horizon.setDate(horizon.getDate() + 15);
+    var start = ymd(first > today ? first : today), end = ymd(last < horizon ? last : horizon);
+    var cities = [];
+    data.days.forEach(function (d) { if (own(COORD, d.city) && cities.indexOf(d.city) < 0) cities.push(d.city); });
+    Promise.all(cities.map(function (c) {
+      var u = 'https://api.open-meteo.com/v1/forecast?latitude=' + COORD[c][0] + '&longitude=' + COORD[c][1] +
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Europe%2FRome&start_date=' + start + '&end_date=' + end;
+      return fetch(u).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { return [c, j]; }).catch(function () { return [c, null]; });
+    })).then(function (rs) {
+      var days = {}, got = false;
+      rs.forEach(function (x) {
+        var dl = x[1] && x[1].daily;
+        if (!dl || !Array.isArray(dl.time)) return;
+        dl.time.forEach(function (t, i) {
+          var max = (dl.temperature_2m_max || [])[i], min = (dl.temperature_2m_min || [])[i], pop = (dl.precipitation_probability_max || [])[i];
+          if (typeof t !== 'string' || typeof max !== 'number' || typeof min !== 'number') return;
+          days[t.slice(0, 10) + '|' + x[0]] = { max: max, min: min, code: (dl.weather_code || [])[i], pop: typeof pop === 'number' ? pop : null };
+          got = true;
+        });
+      });
+      if (!got) return;
+      wx = { at: Date.now(), days: days };
+      lsSet(K_WX, JSON.stringify(wx));
+      if (ui.tab === 'plan') render(true);
+    });
+  }
+
+  /* ---------------- exchange rate (Frankfurter, 유럽중앙은행 기준) ---------------- */
+  var fx = readJSON(K_FX);
+  if (!isObj(fx) || typeof fx.rate !== 'number') fx = null;
+  function fxRate() { return prefs.fxManual > 0 ? prefs.fxManual : fx ? fx.rate : 1500; }
+  function fetchRate(force) {
+    if (!force && fx && Date.now() - fx.at < 12 * 3600 * 1000) return;
+    fetch('https://api.frankfurter.dev/v1/latest?base=EUR&symbols=KRW').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      var v = j && j.rates && j.rates.KRW;
+      if (typeof v !== 'number' || !(v > 100 && v < 10000)) return;
+      fx = { rate: v, date: String(j.date || '').slice(0, 10), at: Date.now() };
+      lsSet(K_FX, JSON.stringify(fx));
+      if (ui.tab === 'money') render(true);
+    }).catch(function () { /* 오프라인이면 마지막 환율을 쓴다 */ });
+  }
+  function won(v) { return Math.round(v).toLocaleString('ko-KR') + '원'; }
+  function euro(v) { return '€' + (Math.round(v * 100) / 100).toLocaleString('ko-KR', { maximumFractionDigits: 2 }); }
+  function numIn(s) { var v = parseFloat(String(s).replace(/[^\d.]/g, '')); return isFinite(v) ? v : 0; }
+  function fxCard() {
+    var rate = fxRate();
+    var eur = h('input', { type: 'text', inputmode: 'decimal', 'aria-label': '유로 금액', placeholder: '0', autocomplete: 'off' });
+    var krw = h('input', { type: 'text', inputmode: 'numeric', 'aria-label': '원화 금액', placeholder: '0', autocomplete: 'off' });
+    eur.addEventListener('input', function () { krw.value = eur.value ? Math.round(numIn(eur.value) * rate).toLocaleString('ko-KR') : ''; });
+    krw.addEventListener('input', function () { eur.value = krw.value ? String(Math.round(numIn(krw.value) / rate * 100) / 100) : ''; });
+    var src = prefs.fxManual > 0 ? '직접 넣은 환율' : fx ? '유럽중앙은행 기준 ' + fx.date : '환율을 아직 받지 못해 1,500원으로 계산 중';
+    return h('section', { class: 'card fx' },
+      h('div', { class: 'fx-head' }, h('h3', null, '환율 계산기'),
+        h('button', { class: 'fx-src', onclick: rateSheet, 'aria-label': '환율 바꾸기' }, '1€ = ' + won(rate), icon('pencil', 13))),
+      h('p', { class: 'fx-note' }, src + '. 카드 결제 환율은 보통 1–2% 더 높습니다.'),
+      h('div', { class: 'fx-row' },
+        h('label', { class: 'fx-in' }, h('span', null, '€'), eur),
+        h('span', { class: 'fx-eq' }, '='),
+        h('label', { class: 'fx-in' }, h('span', null, '₩'), krw)),
+      h('div', { class: 'fx-quick' }, [1, 2, 5, 10, 20, 50, 100, 200].map(function (e) {
+        return h('button', { class: 'fx-q', onclick: function () { eur.value = String(e); eur.dispatchEvent(new Event('input')); } },
+          h('b', null, '€' + e), h('small', null, won(e * rate)));
+      })));
+  }
+  function rateSheet() {
+    var f = fText('1유로당 원화', prefs.fxManual > 0 ? String(prefs.fxManual) : '', { ph: fx ? String(fx.rate) : '1500', inputmode: 'decimal' });
+    openSheet({
+      title: '환율 설정',
+      body: [h('p', { class: 'sheet-msg' }, '카드사 앱에 나오는 환율을 넣으면 그 값으로 계산합니다. "자동 환율"을 누르면 유럽중앙은행 기준 환율을 씁니다.'), f.el],
+      actions: [
+        { label: '자동 환율', run: function () { prefs.fxManual = 0; savePrefs(); fetchRate(true); render(true); } },
+        { label: '저장', kind: 'primary', run: function () {
+          var raw = f.get().replace(/,/g, ''), v = parseFloat(raw);
+          if (raw && !(v > 100 && v < 10000)) { toast('100에서 10,000 사이 숫자를 넣으세요'); return false; }
+          prefs.fxManual = raw ? v : 0; savePrefs(); render(true);
+        } }
+      ]
+    });
+  }
+
+  /* ---------------- expenses (편집자만, 공유 일정 파일에 저장) ---------------- */
+  var EX_CAT = [['food', '식비'], ['trans', '교통'], ['sight', '입장료'], ['stay', '숙소'], ['shop', '쇼핑'], ['etc', '기타']];
+  function exCat(k) { var c = EX_CAT.find(function (x) { return x[0] === k; }); return c ? c[1] : '기타'; }
+  function exKRW(x) { return x.cur === 'KRW' ? x.amount : x.amount * (x.rate || fxRate()); }
+  // 각자 낸 돈과 써야 할 몫을 비교해, 보낼 사람과 받을 사람을 큰 금액부터 짝짓는다.
+  function settle(ex) {
+    var n = ex.people.length, paid = [], owe = [], bal = [];
+    for (var i = 0; i < n; i++) { paid.push(0); owe.push(0); bal.push(0); }
+    ex.items.forEach(function (x) {
+      var v = exKRW(x), parts = x.split.length ? x.split : ex.people.map(function (_, k) { return k; });
+      paid[x.payer] += v; bal[x.payer] += v;
+      parts.forEach(function (p) { owe[p] += v / parts.length; bal[p] -= v / parts.length; });
+    });
+    var debt = [], cred = [], moves = [];
+    bal.forEach(function (b, k) { if (b < -0.5) debt.push([k, -b]); else if (b > 0.5) cred.push([k, b]); });
+    debt.sort(function (a, b) { return b[1] - a[1]; });
+    cred.sort(function (a, b) { return b[1] - a[1]; });
+    for (var di = 0, ci = 0; di < debt.length && ci < cred.length;) {
+      var m = Math.min(debt[di][1], cred[ci][1]);
+      moves.push([debt[di][0], cred[ci][0], m]);
+      debt[di][1] -= m; cred[ci][1] -= m;
+      if (debt[di][1] < 0.5) di++;
+      if (cred[ci][1] < 0.5) ci++;
+    }
+    return { paid: paid, owe: owe, moves: moves };
+  }
+  function defaultExDate() {
+    var t = todayStr();
+    if (data.days.some(function (d) { return d.date === t; })) return t;
+    if (ui.day >= 0 && data.days[ui.day]) return data.days[ui.day].date;
+    return data.days.length ? data.days[0].date : t;
+  }
+  function viewMoney() {
+    var out = [fxCard()], ex = data.expenses;
+    out.push(h('div', { class: 'sec-title' }, h('h3', null, '여행 경비'), isEditor() ? h('button', { onclick: peopleSheet }, '함께 쓰는 사람') : null));
+    if (!isEditor()) {
+      out.push(h('div', { class: 'empty' }, '경비 기록은 편집 권한이 있는 사람만 보고 쓸 수 있습니다. 정보 탭에서 편집 권한을 연결하세요.'));
+      return out;
+    }
+    var total = ex.items.reduce(function (s, x) { return s + exKRW(x); }, 0), st = settle(ex);
+    out.push(h('section', { class: 'card ex-sum' },
+      h('div', { class: 'ex-total' }, h('small', null, '총 지출'), h('b', null, won(total)), h('span', null, '≈ ' + euro(total / fxRate()))),
+      h('div', { class: 'ex-people' }, ex.people.map(function (p, i) {
+        return h('div', { class: 'ex-p' }, h('b', null, p), h('small', null, '낸 돈 ' + won(st.paid[i])), h('small', null, '쓴 몫 ' + won(st.owe[i])));
+      })),
+      h('div', { class: 'ex-settle' }, h('div', { class: 'field-l' }, '정산'), st.moves.length ? st.moves.map(function (m) {
+        return h('div', { class: 'ex-move' }, h('span', null, ex.people[m[0]] + ' → ' + ex.people[m[1]]), h('b', null, won(m[2])));
+      }) : h('span', { class: 'muted small' }, ex.items.length ? '서로 보낼 돈이 없습니다' : '경비를 넣으면 누가 누구에게 얼마를 보내면 되는지 계산합니다'))));
+    out.push(h('button', { class: 'add-btn solid', onclick: function () { editExpense(null); } }, icon('plus', 18), '경비 추가'));
+    var groups = {};
+    ex.items.forEach(function (x, i) { var k = x.date || '날짜 없음'; (groups[k] = groups[k] || []).push([x, i]); });
+    Object.keys(groups).sort().reverse().forEach(function (k) {
+      var rows = groups[k], sum = rows.reduce(function (s, p) { return s + exKRW(p[0]); }, 0);
+      out.push(h('div', { class: 'sec-title' }, h('h3', null, /^\d{4}-\d{2}-\d{2}$/.test(k) ? fmtShort(k) : k), h('span', { class: 'cnt' }, won(sum))));
+      out.push(h('div', { class: 'list' }, rows.map(function (p) {
+        var x = p[0];
+        var who = x.split.length === ex.people.length ? '모두' : x.split.map(function (i) { return ex.people[i]; }).join(', ');
+        return h('button', { class: 'ex-row', onclick: function () { editExpense(p[1]); } },
+          h('span', { class: 'chip t-info' }, exCat(x.cat)),
+          h('span', { class: 'ex-main' }, h('b', null, x.title || exCat(x.cat)), h('small', null, ex.people[x.payer] + ' 냄 · ' + who + ' 나눔')),
+          h('span', { class: 'ex-amt' }, h('b', null, x.cur === 'EUR' ? euro(x.amount) : won(x.amount)), x.cur === 'EUR' ? h('small', null, won(exKRW(x))) : null));
+      })));
+    });
+    out.push(h('p', { class: 'foot' }, '경비도 공개 저장소에 저장됩니다. 유로로 쓴 돈은 입력할 때의 환율로 원화를 계산합니다.'));
+    return out;
+  }
+  function editExpense(i) {
+    var ex = data.expenses, isNew = i == null;
+    var x = isNew ? { id: uid('e'), title: '', amount: 0, cur: 'EUR', rate: null, payer: 0, split: ex.people.map(function (_, k) { return k; }), cat: 'food', date: defaultExDate() } : ex.items[i];
+    var fTitle = fText('내용', x.title, { ph: '예: 바티칸 점심, 레오나르도 익스프레스' });
+    var fAmt = fText('금액', isNew ? '' : String(x.amount), { ph: '0', inputmode: 'decimal' });
+    var fCur = fSeg('통화', [['EUR', '유로 €'], ['KRW', '원 ₩']], x.cur);
+    var fWhen = fDate('날짜', x.date);
+    var fCat = fSeg('분류', EX_CAT, x.cat || 'etc');
+    var fPayer = fSeg('낸 사람', ex.people.map(function (p, k) { return [k, p]; }), x.payer);
+    var split = x.split.slice();
+    var splitBox = h('div', { class: 'type-row' }, ex.people.map(function (p, k) {
+      var b = h('button', { type: 'button', class: 'chip t-book' + (split.indexOf(k) >= 0 ? ' on' : ''), 'aria-pressed': String(split.indexOf(k) >= 0), onclick: function () {
+        var j = split.indexOf(k);
+        if (j >= 0) split.splice(j, 1); else split.push(k);
+        b.classList.toggle('on', split.indexOf(k) >= 0);
+        b.setAttribute('aria-pressed', String(split.indexOf(k) >= 0));
+      } }, p);
+      return b;
+    }));
+    openSheet({
+      title: isNew ? '경비 추가' : '경비 수정',
+      body: [fTitle.el, h('div', { class: 'two' }, fAmt.el, fCur.el), fWhen.el, fCat.el, fPayer.el, field('나눌 사람', splitBox)],
+      actions: (isNew ? [{ label: '취소' }] : [{ label: '삭제', kind: 'danger', run: function () {
+        withUndo('경비를 삭제했습니다', function () { ex.items.splice(ex.items.indexOf(x), 1); });
+      } }]).concat([{ label: isNew ? '추가' : '저장', kind: 'primary', run: function () {
+        var amt = numIn(fAmt.get().replace(/,/g, ''));
+        if (!(amt > 0 && amt < 1e9)) { toast('금액을 넣으세요'); return false; }
+        if (!split.length) { toast('나눌 사람을 한 명 이상 고르세요'); return false; }
+        var cur = fCur.get(), keepRate = !isNew && x.cur === 'EUR' && cur === 'EUR' && x.rate;
+        x.title = fTitle.get().slice(0, 100);
+        x.amount = Math.round(amt * 100) / 100;
+        x.cur = cur;
+        x.rate = cur === 'EUR' ? (keepRate ? x.rate : fxRate()) : null;
+        x.date = fWhen.get() || defaultExDate();
+        x.cat = fCat.get();
+        x.payer = +fPayer.get();
+        x.split = split.slice().sort();
+        if (isNew) ex.items.push(x);
+        save(); render(true);
+      } }])
+    });
+  }
+  function peopleSheet() {
+    var ex = data.expenses, names = ex.people.slice(), box = h('div');
+    function used(k) { return ex.items.some(function (x) { return x.payer === k || x.split.indexOf(k) >= 0; }); }
+    function draw() {
+      box.replaceChildren ? box.replaceChildren() : (box.innerHTML = '');
+      names.forEach(function (n, k) {
+        var inp = h('input', { type: 'text', maxlength: '20', autocomplete: 'off' });
+        inp.value = n;
+        inp.addEventListener('input', function () { names[k] = inp.value; });
+        box.appendChild(field((k + 1) + '번째 사람', inp));
+      });
+      var row = h('div', { class: 'order-row', style: 'margin-top:12px' });
+      if (names.length < 4) row.appendChild(h('button', { type: 'button', class: 'btn', onclick: function () { names.push('동행' + names.length); draw(); } }, icon('plus', 16), '사람 추가'));
+      if (names.length > 2 && !used(names.length - 1)) row.appendChild(h('button', { type: 'button', class: 'btn', onclick: function () { names.pop(); draw(); } }, '마지막 사람 빼기'));
+      box.appendChild(row);
+    }
+    draw();
+    openSheet({
+      title: '함께 쓰는 사람',
+      body: [h('p', { class: 'sheet-msg' }, '경비를 나눌 사람 이름입니다. 2–4명까지 됩니다. 경비에 쓰인 사람은 뺄 수 없습니다.'), box],
+      actions: [{ label: '취소' }, { label: '저장', kind: 'primary', run: function () {
+        var clean = names.map(function (n) { return String(n).trim().slice(0, 20); });
+        if (clean.some(function (n) { return !n; })) { toast('이름을 모두 넣으세요'); return false; }
+        ex.people = clean; save(); render(true);
+      } }]
+    });
+  }
+
   /* ---------------- info ---------------- */
   function findGuide(id) { return data.guides.find(function (g) { return g.id === id; }); }
   function openGuide(id) { ui.scroll.info = window.scrollY; ui.guide = id; render(); window.scrollTo(0, 0); }
@@ -1123,7 +1391,7 @@
     var sheet = openSheet({
       title: '편집 권한 연결',
       body: [
-        h('p', { class: 'sheet-msg' }, '저장소 주인이나 초대받은 협업자가 만든 GitHub 토큰을 붙여 넣으세요. 토큰은 이 기기 안에만 저장되고 GitHub 말고는 어디에도 보내지 않습니다.'),
+        h('p', { class: 'sheet-msg' }, '일정 저장소(' + REPO.owner + '/' + REPO.name + ')에 쓸 수 있는 GitHub 토큰을 붙여 넣으세요. 주인은 이 저장소 하나만 고른 Fine-grained 토큰, 협업자는 이 저장소에 초대받은 뒤 만든 토큰을 씁니다. 토큰은 이 기기 안에만 저장되고 GitHub 말고는 어디에도 보내지 않습니다.'),
         h('div', { class: 'hint-box' }, h('b', null, '공개 주의. '), '고친 일정은 공개 저장소에 저장되어 주소를 아는 누구나 볼 수 있습니다. 예약번호, 여권번호, 연락처 같은 개인정보는 적지 마세요.'),
         field('GitHub 토큰', inp), err,
         h('div', { class: 'hint-box' }, h('b', null, '아이폰. '), 'Safari와 홈 화면 앱은 저장 공간이 따로라, 홈 화면 앱에서 고치려면 앱 안에서 한 번 더 연결하세요.')
@@ -1743,6 +2011,8 @@
     try { render(); } catch (e2) { app.textContent = '앱을 여는 중 문제가 생겼습니다. 새로고침해 주세요.'; }
   }
   fetchRemote();
+  fetchRate();
+  fetchWeather();
   if (dirty) setTimeout(publish, 1500);
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
