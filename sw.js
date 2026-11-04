@@ -1,8 +1,8 @@
 /* 오프라인용 서비스 워커. 앱 파일은 미리 저장하고, 글꼴은 처음 받을 때 저장합니다. */
-var VERSION = 'italy2026-v5';
+var VERSION = 'italy2026-v6';
 var FONT_CACHE = 'italy2026-fonts';
 var SHELL = [
-  './', './index.html', './styles.css?v=5', './app.js?v=5', './data.js?v=5', './manifest.webmanifest',
+  './', './index.html', './styles.css?v=6', './app.js?v=6', './data.js?v=6', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'
 ];
 

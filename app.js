@@ -287,7 +287,8 @@
     up: '<path d="M12 19V5.5M6.5 11L12 5.5 17.5 11"/>',
     down: '<path d="M12 5v13.5M6.5 13l5.5 5.5 5.5-5.5"/>',
     route: '<circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H15a3 3 0 000-6H9a3 3 0 010-6h6.8"/>',
-    star: '<path d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z"/>'
+    star: '<path d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z"/>',
+    grip: '<circle cx="9" cy="6.5" r="1.1"/><circle cx="15" cy="6.5" r="1.1"/><circle cx="9" cy="12" r="1.1"/><circle cx="15" cy="12" r="1.1"/><circle cx="9" cy="17.5" r="1.1"/><circle cx="15" cy="17.5" r="1.1"/>'
   };
   function icon(name, size) {
     var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -300,6 +301,74 @@
     return s;
   }
   function editIc() { return ui.edit ? h('span', { class: 'edit-ic' }, icon('pencil', 15)) : null; }
+
+  /* ---------------- drag to reorder (edit mode) ----------------
+     손잡이(⠿)를 끌면 같은 목록 안에서 순서가 바뀐다. 마우스·터치·펜 모두 Pointer Events로 처리하고,
+     키보드는 손잡이에서 위·아래 화살표로 옮긴다. 목록 요소에는 data-list, 항목에는 data-idx가 있어야 한다. */
+  var justDragged = 0;
+  function tapGuard(fn) { return function (e) { if (Date.now() - justDragged < 450) return; fn(e); }; }
+  function moveInArray(arr, from, to) { var x = arr.splice(from, 1)[0]; arr.splice(to, 0, x); }
+  function dragHandle(label, onMove) {
+    var btn = h('button', { type: 'button', class: 'drag-h', 'aria-label': label + ' 순서 바꾸기. 끌거나 위아래 화살표 키', title: '끌어서 순서 바꾸기' }, icon('grip', 20));
+    btn.addEventListener('click', function (e) { e.stopPropagation(); });
+    btn.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      var item = btn.closest('[data-idx]'), list = item.parentNode;
+      var count = list.querySelectorAll(':scope > [data-idx]').length;
+      var from = +item.dataset.idx, to = from + (e.key === 'ArrowUp' ? -1 : 1);
+      if (to < 0 || to >= count) return;
+      var key = list.getAttribute('data-list');
+      onMove(from, to);
+      var again = document.querySelector('[data-list="' + key + '"] > [data-idx="' + to + '"] .drag-h');
+      if (again) again.focus();
+    });
+    btn.addEventListener('pointerdown', function (e) {
+      if (e.button) return;
+      var item = btn.closest('[data-idx]'), list = item.parentNode;
+      e.preventDefault(); e.stopPropagation();
+      // 끄는 동안 항목을 DOM에서 옮기면 포인터 캡처가 풀리므로, 움직임은 window에서 받는다.
+      var pid = e.pointerId, from = +item.dataset.idx, lastY = e.clientY, raf = 0;
+      item.classList.add('drag-on');
+      document.body.classList.add('dragging');
+      if (navigator.vibrate) try { navigator.vibrate(10); } catch (err) { /* ignore */ }
+      var sibs = function () { return Array.prototype.filter.call(list.children, function (c) { return c !== item && c.hasAttribute('data-idx'); }); };
+      var place = function (y) {
+        var s = sibs(), before = null;
+        for (var i = 0; i < s.length; i++) { var r = s[i].getBoundingClientRect(); if (y < r.top + r.height / 2) { before = s[i]; break; } }
+        if (before) { if (item.nextElementSibling !== before) list.insertBefore(item, before); }
+        else if (s.length) { var last = s[s.length - 1]; if (last.nextElementSibling !== item) list.insertBefore(item, last.nextSibling); }
+      };
+      var tick = function () {
+        // 헤더 바로 아래나 하단 탭 바로 위 약 50px 안에 손가락이 있을 때만 천천히 스크롤한다.
+        var tabbar = document.querySelector('.tabbar');
+        var top = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hdr')) || 100) + 50;
+        var bottom = window.innerHeight - (tabbar ? tabbar.offsetHeight : 60) - 50, dy = 0;
+        if (lastY < top) dy = -Math.min(10, Math.ceil((top - lastY) / 5));
+        else if (lastY > bottom) dy = Math.min(10, Math.ceil((lastY - bottom) / 5));
+        if (dy) { window.scrollBy(0, dy); place(lastY); }
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+      var move = function (ev) { if (ev.pointerId !== pid) return; ev.preventDefault(); lastY = ev.clientY; place(lastY); };
+      var end = function (ev) {
+        if (ev.pointerId !== pid) return;
+        cancelAnimationFrame(raf);
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', end);
+        window.removeEventListener('pointercancel', end);
+        item.classList.remove('drag-on');
+        document.body.classList.remove('dragging');
+        justDragged = Date.now();
+        var to = Array.prototype.filter.call(list.children, function (c) { return c.hasAttribute('data-idx'); }).indexOf(item);
+        if (to !== from && to >= 0) onMove(from, to);
+      };
+      window.addEventListener('pointermove', move, { passive: false });
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
+    });
+    return btn;
+  }
 
   /* ---------------- sanitizer for rich text ---------------- */
   var ALLOWED = { B: 1, STRONG: 1, I: 1, EM: 1, U: 1, BR: 1, P: 1, DIV: 1, SPAN: 1, A: 1, UL: 1, OL: 1, LI: 1, H3: 1, H4: 1, TABLE: 1, THEAD: 1, TBODY: 1, TR: 1, TH: 1, TD: 1, TIME: 1, SMALL: 1 };
@@ -407,7 +476,7 @@
     if (!found.length) return null;
     return h('div', { class: 'plinks' }, found.map(function (f) {
       return h('span', { class: 'plk' },
-        h('a', { href: mapUrl(f.p, f.c), target: '_blank', rel: 'noopener', onclick: stop, 'aria-label': f.p.name + ' 지도' }, icon('map', 14), f.p.name),
+        h('a', { href: mapUrl(f.p, f.c), target: '_blank', rel: 'noopener', onclick: stop, 'aria-label': f.p.name + ' 지도' }, icon('map', 14), f.p.name.replace(/\s*\([^)]*\)\s*/g, ' ').trim() || f.p.name),
         h('a', { class: 'plk-blog', href: blogUrl(f.p, f.c), target: '_blank', rel: 'noopener', onclick: stop, 'aria-label': f.p.name + ' 블로그 후기' }, icon('blog', 14), '후기'));
     }));
   }
@@ -470,7 +539,7 @@
     var pill = bar.querySelector('.sync-pill');
     if (pill) paintSync(pill);
     var parts = [bar];
-    if (ui.edit) parts.push(h('div', { class: 'edit-banner' }, icon('pencil', 15), '편집 중 · 고친 내용은 몇 초 뒤 모든 사람에게 저장됩니다.'));
+    if (ui.edit) parts.push(h('div', { class: 'edit-banner' }, icon('pencil', 15), '편집 중 · 누르면 수정, 오른쪽 ⠿를 끌면 순서 변경. 몇 초 뒤 모두에게 저장됩니다.'));
     if (ui.tab === 'plan') parts.push(dateStrip());
     if (ui.tab === 'places') parts.push(citySeg());
     return h('header', { class: 'appbar' }, parts);
@@ -548,12 +617,15 @@
       editIc()));
     if (d.items.length) {
       var pidx = placeIndex();
-      out.push(h('ol', { class: 'tl', 'data-city': d.city }, d.items.map(function (it, ii) {
-        return h('li', { class: 'tl-item' + (ii === nowIdx ? ' now' : '') + (ui.edit ? ' editable' : ''), onclick: ui.edit ? function () { editItem(di, ii); } : null },
+      out.push(h('ol', { class: 'tl', 'data-city': d.city, 'data-list': 'day-' + di }, d.items.map(function (it, ii) {
+        return h('li', { class: 'tl-item' + (ii === nowIdx ? ' now' : '') + (ui.edit ? ' editable' : ''), 'data-idx': ii, onclick: ui.edit ? tapGuard(function () { editItem(di, ii); }) : null },
           h('div', { class: 'tl-time' }, it.time),
           h('div', { class: 'tl-rail' }),
           h('div', { class: 'tl-body' }, h('div', { class: 'tl-text', html: sanitize(it.text) }), chipsOf(it.tags), placeLinks(it, d, pidx)),
-          editIc());
+          ui.edit ? dragHandle(it.time + ' 일정', function (from, to) {
+            moveInArray(d.items, from, to); save(); render(true);
+            toast('순서를 바꿨습니다. 시간도 맞는지 확인하세요');
+          }) : null);
       })));
     } else if (!ui.edit) {
       out.push(h('div', { class: 'empty', style: 'margin-top:12px' }, '이 날 일정이 비어 있습니다. 위의 편집을 눌러 추가하세요.'));
@@ -579,7 +651,7 @@
     el.addEventListener('touchstart', function (e) {
       if (e.touches.length !== 1 || document.querySelector('.sheet-back')) { x0 = null; return; }
       var t = e.touches[0];
-      if (t.clientX < 24 || t.clientX > window.innerWidth - 24 || e.target.closest('.tbl,[contenteditable="true"],input,textarea')) { x0 = null; return; }
+      if (t.clientX < 24 || t.clientX > window.innerWidth - 24 || e.target.closest('.tbl,[contenteditable="true"],input,textarea,.drag-h') || document.body.classList.contains('dragging')) { x0 = null; return; }
       x0 = t.clientX; y0 = t.clientY; t0 = Date.now();
     }, { passive: true });
     el.addEventListener('touchend', function (e) {
@@ -612,14 +684,14 @@
       if (ui.onlyTodo && !items.length && !ui.edit) return;
       out.push(h('div', { class: 'sec-title' }, h('h3', null, g.title),
         ui.edit ? h('button', { onclick: function () { editGroup(gi); } }, '이름 바꾸기') : h('span', { class: 'cnt' }, gdone + '/' + g.items.length)));
-      var list = h('div', { class: 'list' }, items.map(function (p) {
+      var list = h('div', { class: 'list', 'data-list': 'ck-' + gi }, items.map(function (p) {
         var it = p[0], ii = p[1];
-        return h('div', { class: 'ck' + (it.done ? ' done' : '') + (isEditor() ? '' : ' ro') },
+        return h('div', { class: 'ck' + (it.done ? ' done' : '') + (isEditor() ? '' : ' ro'), 'data-idx': ii },
           h('button', { class: 'ckbox', role: 'checkbox', 'aria-checked': String(!!it.done), 'aria-disabled': isEditor() ? null : 'true', 'aria-label': it.label, onclick: function () { toggleCheck(gi, ii); } }, icon('check', 16)),
-          h('div', { class: 'ck-body' + (ui.edit ? ' editable' : ''), onclick: ui.edit ? function () { editCheck(gi, ii); } : isEditor() ? function () { toggleCheck(gi, ii); } : null },
+          h('div', { class: 'ck-body' + (ui.edit ? ' editable' : ''), onclick: ui.edit ? tapGuard(function () { editCheck(gi, ii); }) : isEditor() ? function () { toggleCheck(gi, ii); } : null },
             h('div', { class: 'ck-label' }, it.label),
             it.meta ? h('div', { class: 'ck-meta', html: sanitize(it.meta), onclick: function (e) { if (e.target.closest('a')) e.stopPropagation(); } }) : null),
-          editIc());
+          ui.edit ? dragHandle(it.label, function (from, to) { moveInArray(g.items, from, to); save(); render(true); }) : null);
       }));
       if (!items.length) list.appendChild(h('div', { class: 'all-done' }, '항목이 없습니다.'));
       out.push(list);
@@ -664,7 +736,7 @@
     }
     var list = P[ui.cat];
     if (!list.length) out.push(h('div', { class: 'empty', style: 'margin-top:12px' }, ui.edit ? '아래 버튼으로 장소를 추가하세요.' : '아직 등록된 곳이 없습니다.'));
-    out.push(h('div', { class: 'cards' }, list.map(function (p, i) { return placeCard(c, ui.cat, p, i); })));
+    out.push(h('div', { class: 'cards', 'data-list': 'pl-' + c + '-' + ui.cat }, list.map(function (p, i) { return placeCard(c, ui.cat, p, i); })));
     if (ui.edit) out.push(h('button', { class: 'add-btn solid', onclick: function () { editPlace(c, ui.cat, null); } }, icon('plus', 18), CAT_LABEL[ui.cat] + ' 추가'));
     return out;
   }
@@ -672,7 +744,7 @@
     var isSight = cat === 'sight';
     var review = p.review ? h('div', { class: 'pl-review', onclick: function (e) { e.stopPropagation(); e.currentTarget.firstChild.classList.toggle('open'); } },
       h('div', { class: 'clamp' }, h('b', null, '후기 '), p.review)) : null;
-    return h('article', { class: 'card place' + (ui.edit ? ' editable' : ''), 'data-city': c, onclick: ui.edit ? function () { editPlace(c, cat, i); } : null },
+    return h('article', { class: 'card place' + (ui.edit ? ' editable' : ''), 'data-city': c, 'data-idx': i, onclick: ui.edit ? tapGuard(function () { editPlace(c, cat, i); }) : null },
       h('div', { class: 'pl-top' }, h('h3', null, p.name), p.when ? h('span', { class: 'when' }, p.when) : null),
       !isSight && p.area ? h('div', { class: 'pl-area' }, icon('pin', 14), p.area) : null,
       !isSight && p.rating ? h('div', { class: 'pl-rate' }, h('span', { class: 'star' }, '★ '), p.rating, p.reviews ? h('span', { class: 'muted' }, ' · 리뷰 ' + p.reviews) : null) : null,
@@ -687,7 +759,7 @@
       h('div', { class: 'pl-actions' },
         h('a', { class: 'pill-btn', href: mapUrl(p, c), target: '_blank', rel: 'noopener', onclick: stop }, icon('map', 17), '지도'),
         h('a', { class: 'pill-btn', href: blogUrl(p, c), target: '_blank', rel: 'noopener', onclick: stop }, icon('blog', 17), '블로그 후기')),
-      editIc());
+      ui.edit ? dragHandle(p.name, function (from, to) { moveInArray(data.places[c][cat], from, to); save(); render(true); }) : null);
   }
 
   /* ---------------- info ---------------- */
