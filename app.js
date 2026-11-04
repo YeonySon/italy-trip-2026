@@ -2,7 +2,6 @@
 (function () {
   'use strict';
 
-  var KEY = 'italy2026.data.v1';
   var PREF_KEY = 'italy2026.prefs.v1';
   var DEFAULT = window.DEFAULT_DATA;
   var CATS = ['sight', 'food', 'cafe', 'gelato'];
@@ -36,27 +35,173 @@
     d.checklist.forEach(function (g) { g.id = g.id || uid('g'); g.items = g.items || []; });
     return d;
   }
-  function loadData() {
-    try {
-      var s = localStorage.getItem(KEY);
-      if (s) { var d = JSON.parse(s); if (valid(d)) return normalize(d); }
-    } catch (e) { /* fall through to defaults */ }
-    return normalize(clone(DEFAULT));
+  /* ---------------- shared plan on GitHub ----------------
+     모든 사람은 GitHub 저장소의 plan.json을 읽는다. 토큰을 넣은 편집자만 고칠 수 있고,
+     고친 내용은 기기에 먼저 남긴 뒤 몇 초 뒤 plan.json에 커밋한다. 쓰기 권한은 GitHub 서버가 확인한다. */
+  var REPO = { owner: 'YeonySon', name: 'italy-trip-2026', path: 'plan.json', branch: 'main' };
+  var API = 'https://api.github.com/repos/' + REPO.owner + '/' + REPO.name;
+  var K = { cache: 'italy2026.plan.v2', draft: 'italy2026.draft.v2', token: 'italy2026.token.v1', editor: 'italy2026.editor.v1' };
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }
+  function readJSON(k) { try { return JSON.parse(lsGet(k) || 'null'); } catch (e) { return null; } }
+
+  var token = lsGet(K.token) || '';
+  var editorName = lsGet(K.editor) || '';
+  function isEditor() { return !!token; }
+
+  var cache = readJSON(K.cache); // { data, sha, etag, at } — 마지막으로 받은 공유 일정
+  if (cache && !valid(cache.data)) cache = null;
+  var remote = { sha: cache ? cache.sha : null, etag: cache ? cache.etag : null, checked: 0 };
+  var draft = isEditor() ? readJSON(K.draft) : null; // 편집자가 아직 올리지 못한 변경
+  if (draft && !valid(draft.data)) draft = null;
+  var data = normalize(clone(draft ? draft.data : cache ? cache.data : DEFAULT));
+  var dirty = !!draft;
+  var sync = { state: dirty ? 'dirty' : 'idle', at: 0, publishing: false, timer: null };
+
+  function writeCache(plan) {
+    cache = { data: plan, sha: remote.sha, etag: remote.etag, at: Date.now() };
+    lsSet(K.cache, JSON.stringify(cache));
   }
-  var data = loadData();
-  var saveTimer = null;
+  function persistDraft() { if (!lsSet(K.draft, JSON.stringify({ data: data, baseSha: remote.sha }))) toast('기기 저장 공간이 부족합니다.'); }
+  function clearDraft() { lsDel(K.draft); }
+
   function save() {
+    if (!isEditor()) return;
     data.updatedAt = Date.now();
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(flush, 200);
+    dirty = true;
+    persistDraft();
+    setSync('dirty');
+    clearTimeout(sync.timer);
+    sync.timer = setTimeout(publish, 3000);
   }
-  function flush() {
-    clearTimeout(saveTimer);
-    try { localStorage.setItem(KEY, JSON.stringify(data)); }
-    catch (e) { toast('저장하지 못했습니다. 기기 저장 공간을 확인하세요.'); }
-  }
+  function flush() { if (dirty) persistDraft(); }
   window.addEventListener('pagehide', flush);
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') { runPending(); flush(); } });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') { runPending(); flush(); if (dirty) publish(); }
+    else if (Date.now() - remote.checked > 60000) fetchRemote();
+  });
+  window.addEventListener('online', function () { if (dirty) publish(); fetchRemote(); });
+
+  function b64encode(str) {
+    var bytes = new TextEncoder().encode(str), bin = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  function b64decode(b64) {
+    var bin = atob(String(b64).replace(/\s/g, '')), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function gh(method, url, body, tok) {
+    var headers = { Accept: 'application/vnd.github+json' };
+    var t = tok || token;
+    if (t) headers.Authorization = 'Bearer ' + t;
+    var opt = { method: method, headers: headers, cache: 'no-store' };
+    if (body) { headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+    return fetch(url, opt);
+  }
+  var contentsUrl = API + '/contents/' + REPO.path;
+
+  var fetching = false;
+  function fetchRemote() {
+    if (fetching) return Promise.resolve();
+    fetching = true;
+    remote.checked = Date.now();
+    var opt = { method: 'GET', headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' };
+    if (token) opt.headers.Authorization = 'Bearer ' + token;
+    if (remote.etag) opt.headers['If-None-Match'] = remote.etag;
+    return fetch(contentsUrl + '?ref=' + REPO.branch, opt).then(function (res) {
+      if (res.status === 304) return null;
+      if (res.status === 401 && token) { setSync('auth'); return null; }
+      if (!res.ok) return fetchSameOrigin();
+      var etag = res.headers.get('ETag');
+      return res.json().then(function (j) { return { plan: JSON.parse(b64decode(j.content)), sha: j.sha, etag: etag }; });
+    }).then(function (r) { if (r) applyRemote(r); })
+      .catch(function () { /* 오프라인이면 갖고 있는 일정을 그대로 쓴다 */ })
+      .then(function () { fetching = false; });
+  }
+  // API 호출 한도에 걸렸을 때는 같은 사이트의 plan.json으로 대신 확인한다.
+  function fetchSameOrigin() {
+    return fetch('plan.json?t=' + Date.now(), { cache: 'no-store' }).then(function (res) {
+      return res.ok ? res.json().then(function (plan) { return { plan: plan, sha: null, etag: null }; }) : null;
+    }).catch(function () { return null; });
+  }
+  function applyRemote(r) {
+    if (!valid(r.plan)) return;
+    var hadBase = !!cache;
+    if (r.sha) {
+      if (r.sha === remote.sha) { remote.etag = r.etag; writeCache(cache ? cache.data : r.plan); return; }
+      remote.sha = r.sha; remote.etag = r.etag;
+    } else if (cache && JSON.stringify(cache.data) === JSON.stringify(r.plan)) return;
+    writeCache(r.plan);
+    if (dirty) { setSync('dirty'); return; }
+    var next = normalize(clone(r.plan));
+    var changed = JSON.stringify(next) !== JSON.stringify(data);
+    data = next;
+    if (changed) { render(true); if (hadBase) toast('새 일정으로 업데이트했습니다'); }
+  }
+
+  function publish() {
+    clearTimeout(sync.timer);
+    if (!isEditor() || !dirty || sync.publishing) return Promise.resolve();
+    if (navigator.onLine === false) { setSync('offline'); return Promise.resolve(); }
+    runPending();
+    sync.publishing = true;
+    setSync('saving');
+    data.updatedAt = Date.now();
+    data.updatedBy = editorName || '';
+    var text = JSON.stringify(data, null, 1);
+    var body = { message: '일정 수정' + (editorName ? ' (' + editorName + ')' : ''), content: b64encode(text + '\n'), branch: REPO.branch };
+    if (remote.sha) body.sha = remote.sha;
+    return gh('PUT', contentsUrl, body).then(function (res) {
+      if (res.status === 409 || res.status === 422) return conflict();
+      if (res.status === 401 || res.status === 403 || res.status === 404) { setSync('auth'); return null; }
+      if (!res.ok) { setSync('error'); return null; }
+      return res.json().then(function (j) {
+        remote.sha = j.content && j.content.sha;
+        remote.etag = null;
+        writeCache(JSON.parse(text));
+        if (JSON.stringify(data, null, 1) === text) { dirty = false; clearDraft(); setSync('saved'); }
+        else { persistDraft(); setSync('dirty'); sync.timer = setTimeout(publish, 3000); }
+      });
+    }).catch(function () { setSync(navigator.onLine === false ? 'offline' : 'error'); })
+      .then(function () { sync.publishing = false; });
+  }
+  function conflict() {
+    setSync('conflict');
+    return gh('GET', contentsUrl + '?ref=' + REPO.branch).then(function (res) { return res.ok ? res.json() : null; }).then(function (j) {
+      if (!j) { setSync('error'); return; }
+      var latest = { plan: JSON.parse(b64decode(j.content)), sha: j.sha };
+      openSheet({
+        title: '다른 곳에서 먼저 저장했습니다',
+        body: h('p', { class: 'sheet-msg' }, '다른 편집자나 다른 기기에서 일정을 먼저 저장했습니다. 내 변경으로 덮어쓰거나, 최신 일정을 받고 내 변경을 버릴 수 있습니다.'),
+        actions: [
+          { label: '최신 일정 받기', run: function () {
+            remote.sha = latest.sha; remote.etag = null; writeCache(latest.plan);
+            data = normalize(clone(latest.plan)); dirty = false; clearDraft(); setSync('idle'); render(true);
+            toast('최신 일정을 받았습니다');
+          } },
+          { label: '내 변경으로 덮어쓰기', kind: 'primary', run: function () { remote.sha = latest.sha; setTimeout(publish, 0); } }
+        ]
+      });
+    });
+  }
+
+  var SYNC_TEXT = { dirty: '저장 대기', saving: '저장 중…', saved: '저장됨', error: '저장 실패 · 다시 시도', offline: '오프라인 · 연결되면 저장', auth: '토큰 확인 필요', conflict: '충돌 확인 중' };
+  function setSync(st) {
+    sync.state = st;
+    if (st === 'saved') sync.at = Date.now();
+    var el = document.querySelector('.sync-pill');
+    if (el) paintSync(el);
+    if (st === 'auth') toast('토큰이 만료됐거나 권한이 없습니다. 정보 탭의 편집 권한에서 다시 연결하세요.');
+  }
+  function paintSync(el) {
+    var st = sync.state;
+    el.className = 'sync-pill s-' + st;
+    el.hidden = !isEditor() || st === 'idle';
+    el.textContent = st === 'saved' ? '저장됨 ' + new Date(sync.at).toTimeString().slice(0, 5) : (SYNC_TEXT[st] || '');
+  }
 
   function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}; } catch (e) { return {}; } }
   var prefs = loadPrefs();
@@ -317,19 +462,24 @@
     var bar = h('div', { class: 'bar' },
       g ? h('button', { class: 'back-btn', 'aria-label': '정보로 돌아가기', onclick: closeGuide }, icon('chevL', 24), '정보') : null,
       h('h1', { class: g ? 'sm' : '' }, g ? '' : TITLES[ui.tab]),
-      h('button', { class: 'edit-btn' + (ui.edit ? ' on' : ''), 'aria-pressed': String(ui.edit), onclick: toggleEdit },
-        ui.edit ? '완료' : [icon('pencil', 15), '편집'])
+      isEditor() ? h('button', { class: 'sync-pill', onclick: function () { if (dirty) publish(); } }) : null,
+      isEditor() ? h('button', { class: 'edit-btn' + (ui.edit ? ' on' : ''), 'aria-pressed': String(ui.edit), onclick: toggleEdit },
+        ui.edit ? '완료' : [icon('pencil', 15), '편집']) : null
     );
+    var pill = bar.querySelector('.sync-pill');
+    if (pill) paintSync(pill);
     var parts = [bar];
-    if (ui.edit) parts.push(h('div', { class: 'edit-banner' }, icon('pencil', 15), '편집 중 · 고칠 항목을 누르세요. 바로 저장됩니다.'));
+    if (ui.edit) parts.push(h('div', { class: 'edit-banner' }, icon('pencil', 15), '편집 중 · 고친 내용은 몇 초 뒤 모든 사람에게 저장됩니다.'));
     if (ui.tab === 'plan') parts.push(dateStrip());
     if (ui.tab === 'places') parts.push(citySeg());
     return h('header', { class: 'appbar' }, parts);
   }
   function toggleEdit() {
+    if (!isEditor()) return;
     runPending();
     ui.edit = !ui.edit;
     if (ui.edit && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
+    if (!ui.edit && dirty) publish();
     render(true);
   }
 
@@ -463,9 +613,9 @@
         ui.edit ? h('button', { onclick: function () { editGroup(gi); } }, '이름 바꾸기') : h('span', { class: 'cnt' }, gdone + '/' + g.items.length)));
       var list = h('div', { class: 'list' }, items.map(function (p) {
         var it = p[0], ii = p[1];
-        return h('div', { class: 'ck' + (it.done ? ' done' : '') },
-          h('button', { class: 'ckbox', role: 'checkbox', 'aria-checked': String(!!it.done), 'aria-label': it.label, onclick: function () { toggleCheck(gi, ii); } }, icon('check', 16)),
-          h('div', { class: 'ck-body' + (ui.edit ? ' editable' : ''), onclick: ui.edit ? function () { editCheck(gi, ii); } : function () { toggleCheck(gi, ii); } },
+        return h('div', { class: 'ck' + (it.done ? ' done' : '') + (isEditor() ? '' : ' ro') },
+          h('button', { class: 'ckbox', role: 'checkbox', 'aria-checked': String(!!it.done), 'aria-disabled': isEditor() ? null : 'true', 'aria-label': it.label, onclick: function () { toggleCheck(gi, ii); } }, icon('check', 16)),
+          h('div', { class: 'ck-body' + (ui.edit ? ' editable' : ''), onclick: ui.edit ? function () { editCheck(gi, ii); } : isEditor() ? function () { toggleCheck(gi, ii); } : null },
             h('div', { class: 'ck-label' }, it.label),
             it.meta ? h('div', { class: 'ck-meta', html: sanitize(it.meta), onclick: function (e) { if (e.target.closest('a')) e.stopPropagation(); } }) : null),
           editIc());
@@ -479,6 +629,7 @@
     return out;
   }
   function toggleCheck(gi, ii) {
+    if (!isEditor()) { toast('체크는 편집 권한이 있는 사람만 할 수 있습니다'); return; }
     var it = data.checklist[gi].items[ii];
     it.done = !it.done;
     if (navigator.vibrate) try { navigator.vibrate(8); } catch (e) { /* ignore */ }
@@ -577,16 +728,88 @@
         }))),
       h('button', { class: 'row', onclick: installSheet }, h('span', { class: 'row-ic' }, icon('phone', 19)),
         h('span', { class: 'row-t' }, h('b', null, isStandalone() ? '앱으로 실행 중' : '홈 화면에 설치'), h('small', null, isStandalone() ? '인터넷 없이도 열립니다' : '아이폰·안드로이드에서 앱처럼 쓰기')), h('span', { class: 'chev' }, icon('chevR', 18))),
+      h('button', { class: 'row', onclick: tokenSheet }, h('span', { class: 'row-ic' }, icon('pencil', 19)),
+        h('span', { class: 'row-t' }, h('b', null, isEditor() ? '편집 권한 연결됨' : '편집 권한 연결'),
+          h('small', null, isEditor() ? (editorName || '편집자') + ' · 이 기기에서 일정을 고칠 수 있습니다' : '저장소 주인과 초대받은 협업자만 필요합니다')),
+        h('span', { class: 'chev' }, icon('chevR', 18))),
+      isEditor() ? h('a', { class: 'row', href: 'https://github.com/' + REPO.owner + '/' + REPO.name + '/commits/' + REPO.branch + '/' + REPO.path, target: '_blank', rel: 'noopener' },
+        h('span', { class: 'row-ic' }, icon('reset', 19)),
+        h('span', { class: 'row-t' }, h('b', null, '수정 기록 보기'), h('small', null, '누가 언제 고쳤는지, 이전 버전 내용은 GitHub에서')), h('span', { class: 'chev' }, icon('chevR', 18))) : null,
       h('button', { class: 'row', onclick: exportBackup }, h('span', { class: 'row-ic' }, icon('download', 19)),
-        h('span', { class: 'row-t' }, h('b', null, '백업 내보내기'), h('small', null, '파일로 저장하거나 카톡으로 동행에게 보내기')), h('span', { class: 'chev' }, icon('chevR', 18))),
-      h('button', { class: 'row', onclick: importBackup }, h('span', { class: 'row-ic' }, icon('upload', 19)),
-        h('span', { class: 'row-t' }, h('b', null, '백업 불러오기'), h('small', null, '다른 기기에서 내보낸 파일로 바꾸기')), h('span', { class: 'chev' }, icon('chevR', 18))),
-      h('button', { class: 'row danger', onclick: resetData }, h('span', { class: 'row-ic' }, icon('reset', 19)),
-        h('span', { class: 'row-t' }, h('b', null, '처음 일정으로 되돌리기'), h('small', null, '고친 내용과 체크 표시가 모두 지워집니다')))));
+        h('span', { class: 'row-t' }, h('b', null, '일정 파일로 저장'), h('small', null, '지금 일정을 파일로 보관하기')), h('span', { class: 'chev' }, icon('chevR', 18))),
+      isEditor() ? h('button', { class: 'row', onclick: importBackup }, h('span', { class: 'row-ic' }, icon('upload', 19)),
+        h('span', { class: 'row-t' }, h('b', null, '일정 파일 불러오기'), h('small', null, '불러온 일정이 모든 사람에게 저장됩니다')), h('span', { class: 'chev' }, icon('chevR', 18))) : null));
     out.push(h('p', { class: 'foot' },
-      '고친 내용은 이 기기 안에만 저장됩니다. 기기를 바꾸거나 동행과 맞추려면 백업 파일을 보내세요.',
-      data.updatedAt ? h('br') : null, data.updatedAt ? '마지막 저장 ' + new Date(data.updatedAt).toLocaleString('ko-KR') : null));
+      isEditor() ? '이 기기에서 고친 내용은 몇 초 뒤 모든 사람에게 저장됩니다.' : '일정은 편집 권한이 있는 사람이 저장하면 자동으로 업데이트됩니다.',
+      data.updatedAt ? h('br') : null,
+      data.updatedAt ? '마지막 저장 ' + new Date(data.updatedAt).toLocaleString('ko-KR') + (data.updatedBy ? ' · ' + data.updatedBy : '') : null));
     return out;
+  }
+
+  /* ---------------- edit permission (GitHub token) ---------------- */
+  function tokenSheet() {
+    if (isEditor()) {
+      openSheet({
+        title: '편집 권한',
+        body: [h('p', { class: 'sheet-msg' }, (editorName || '편집자') + ' 계정으로 연결되어 있습니다. 이 기기에서 고친 내용은 몇 초 뒤 GitHub에 저장되고, 앱을 여는 모든 사람에게 반영됩니다.'),
+          h('div', { class: 'hint-box' }, '휴대폰을 잃어버리면 GitHub의 Settings → Developer settings에서 이 토큰을 지우세요. 그 즉시 편집이 막힙니다.')],
+        actions: [{ label: '닫기' }, { label: '연결 해제', kind: 'danger wide', run: disconnectToken }]
+      });
+      return;
+    }
+    var inp = h('input', { type: 'password', placeholder: 'github_pat_… 또는 ghp_…', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', enterkeyhint: 'done' });
+    var err = h('p', { class: 'field-err', role: 'alert' });
+    var sheet = openSheet({
+      title: '편집 권한 연결',
+      body: [
+        h('p', { class: 'sheet-msg' }, '저장소 주인이나 초대받은 협업자가 만든 GitHub 토큰을 붙여 넣으세요. 토큰은 이 기기 안에만 저장되고 GitHub 말고는 어디에도 보내지 않습니다.'),
+        field('GitHub 토큰', inp), err,
+        h('div', { class: 'hint-box' }, h('b', null, '아이폰. '), 'Safari와 홈 화면 앱은 저장 공간이 따로라, 홈 화면 앱에서 고치려면 앱 안에서 한 번 더 연결하세요.')
+      ],
+      actions: [{ label: '취소' }, { label: '연결', kind: 'primary', run: function () {
+        var t = inp.value.trim();
+        if (!t) { err.textContent = '토큰을 붙여 넣으세요.'; return false; }
+        connectToken(t, err, sheet);
+        return false;
+      } }]
+    });
+  }
+  function connectToken(t, err, sheet) {
+    err.textContent = '확인 중…';
+    gh('GET', API, null, t).then(function (res) {
+      if (res.status === 401) throw new Error('토큰이 올바르지 않거나 만료됐습니다.');
+      if (!res.ok) throw new Error('이 저장소에 접근할 수 없는 토큰입니다. 토큰의 저장소 설정을 확인하세요.');
+      return res.json();
+    }).then(function (repo) {
+      if (repo.permissions && repo.permissions.push === false) throw new Error('이 계정에는 저장소 쓰기 권한이 없습니다. 저장소 주인에게 협업자 초대를 요청하세요.');
+      return gh('GET', 'https://api.github.com/user', null, t).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; });
+    }).then(function (u) {
+      token = t; editorName = (u && u.login) || '';
+      lsSet(K.token, t); lsSet(K.editor, editorName);
+      remote.etag = null;
+      sheet.close();
+      render(true);
+      toast('편집 권한을 연결했습니다');
+      fetchRemote();
+    }).catch(function (e) {
+      err.textContent = e instanceof TypeError ? '인터넷 연결을 확인하세요.' : (e.message || '연결하지 못했습니다.');
+    });
+  }
+  function disconnectToken() {
+    var go = function () {
+      lsDel(K.token); lsDel(K.editor); clearDraft();
+      token = ''; editorName = ''; dirty = false; ui.edit = false; setSync('idle');
+      data = normalize(clone(cache ? cache.data : DEFAULT));
+      render(true);
+      toast('이 기기의 편집 권한을 해제했습니다');
+    };
+    if (dirty) {
+      setTimeout(function () {
+        confirmSheet('아직 저장하지 못한 변경이 있습니다', '해제하면 이 기기에서 고친 내용 중 저장되지 않은 부분이 사라집니다.', '해제', go, true);
+      }, 250);
+      return;
+    }
+    go();
   }
   function viewGuide() {
     var g = findGuide(ui.guide);
@@ -1036,13 +1259,13 @@
   function stamp() { var d = new Date(); return ymd(d).replace(/-/g, '') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0'); }
   function exportBackup() {
     runPending(); flush();
-    var name = 'italy-trip-backup-' + stamp() + '.json';
+    var name = 'italy-trip-plan-' + stamp() + '.json';
     var json = JSON.stringify(data, null, 1);
     var file;
     try { file = new File([json], name, { type: 'application/json' }); } catch (e) { file = null; }
     var touch = window.matchMedia('(pointer: coarse)').matches;
     if (file && touch && navigator.canShare && navigator.canShare({ files: [file] })) {
-      navigator.share({ files: [file], title: '이탈리아 여행 백업' }).catch(function (e) { if (e && e.name !== 'AbortError') download(); });
+      navigator.share({ files: [file], title: '이탈리아 여행 일정' }).catch(function (e) { if (e && e.name !== 'AbortError') download(); });
       return;
     }
     download();
@@ -1051,10 +1274,11 @@
       var a = h('a', { href: url, download: name });
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
-      toast('백업 파일을 저장했습니다');
+      toast('일정 파일을 저장했습니다');
     }
   }
   function importBackup() {
+    if (!isEditor()) return;
     var inp = h('input', { type: 'file', accept: '.json,application/json,text/plain', style: 'display:none' });
     inp.addEventListener('change', function () {
       var f = inp.files && inp.files[0];
@@ -1064,9 +1288,9 @@
       r.onload = function () {
         var d;
         try { d = JSON.parse(r.result); } catch (e) { d = null; }
-        if (!valid(d)) { toast('이 앱의 백업 파일이 아닙니다'); return; }
-        confirmSheet('백업으로 바꿀까요?', '지금 이 기기의 일정, 체크 표시, 메모가 백업 파일 내용으로 바뀝니다.', '바꾸기', function () {
-          withUndo('백업을 불러왔습니다', function () { data = normalize(d); ui.day = 0; ui.guide = null; });
+        if (!valid(d)) { toast('이 앱의 일정 파일이 아닙니다'); return; }
+        confirmSheet('이 파일로 바꿀까요?', '일정, 체크 표시, 메모가 파일 내용으로 바뀌고 몇 초 뒤 모든 사람에게 저장됩니다. 이전 버전은 GitHub 수정 기록에 남습니다.', '바꾸기', function () {
+          withUndo('일정 파일을 불러왔습니다', function () { data = normalize(d); ui.day = 0; ui.guide = null; });
         });
       };
       r.onerror = function () { toast('파일을 읽지 못했습니다'); };
@@ -1074,12 +1298,6 @@
     });
     document.body.appendChild(inp);
     inp.click();
-  }
-  function resetData() {
-    confirmSheet('처음 일정으로 되돌릴까요?', '고친 내용, 추가한 장소, 체크 표시가 모두 처음 상태로 돌아갑니다. 필요하면 먼저 백업을 내보내세요.', '되돌리기', function () {
-      pending = [];
-      withUndo('처음 일정으로 되돌렸습니다', function () { data = normalize(clone(DEFAULT)); ui.day = 0; ui.guide = null; });
-    }, true);
   }
   var deferredPrompt = null;
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferredPrompt = e; });
@@ -1105,7 +1323,7 @@
       body.push(h('ol', { class: 'steps' },
         h('li', null, '오른쪽 위 점 세 개 메뉴를 누릅니다.'),
         h('li', null, '"홈 화면에 추가" 또는 "앱 설치"를 누릅니다.')));
-      body.push(h('div', { class: 'hint-box' }, h('b', null, '아이폰 주의. '), 'Safari에서 고친 내용과 홈 화면 앱의 내용은 따로 저장됩니다. 설치한 뒤에는 앱에서 고치세요. 이미 Safari에서 고쳤다면 백업 내보내기 후 앱에서 불러오면 됩니다.'));
+      body.push(h('div', { class: 'hint-box' }, h('b', null, '편집자라면. '), '아이폰은 Safari와 홈 화면 앱의 저장 공간이 따로라, 설치한 앱 안에서 편집 권한을 한 번 더 연결하세요.'));
     }
     openSheet({ title: isStandalone() ? '앱 정보' : '홈 화면에 설치', body: body, actions: [{ label: '닫기', kind: 'primary' }] });
   }
@@ -1153,6 +1371,8 @@
   /* ---------------- boot ---------------- */
   applyTheme();
   render();
+  fetchRemote();
+  if (dirty) setTimeout(publish, 1500);
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }

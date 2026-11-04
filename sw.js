@@ -1,8 +1,8 @@
 /* 오프라인용 서비스 워커. 앱 파일은 미리 저장하고, 글꼴은 처음 받을 때 저장합니다. */
-var VERSION = 'italy2026-v3';
+var VERSION = 'italy2026-v4';
 var FONT_CACHE = 'italy2026-fonts';
 var SHELL = [
-  './', './index.html', './styles.css?v=3', './app.js?v=3', './data.js?v=3', './manifest.webmanifest',
+  './', './index.html', './styles.css?v=4', './app.js?v=4', './data.js?v=4', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'
 ];
 
@@ -28,6 +28,15 @@ self.addEventListener('fetch', function (e) {
       caches.open(VERSION).then(function (c) { c.put('./index.html', copy); });
       return res;
     }).catch(function () { return caches.match('./index.html'); }));
+    return;
+  }
+
+  // 공유 일정 파일: 인터넷이 되면 최신, 안 되면 저장본
+  if (url.origin === self.location.origin && /\/plan\.json$/.test(url.pathname)) {
+    e.respondWith(fetch(req).then(function (res) {
+      if (res.ok) { var copy = res.clone(); caches.open(VERSION).then(function (c) { c.put('./plan.json', copy); }); }
+      return res;
+    }).catch(function () { return caches.match('./plan.json'); }));
     return;
   }
 
